@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option go_package = "/protos";
+/**
+ * I think this is better than `repeated float`
+ */
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+/**
+ * star definition
+ */
+message Star {
+    float id = 1;
+    Vector3 position = 2;
+    Vector3 rotation  = 3;
+    bool active = 4;
+}
+
+/**
+ *
+ */
+message Stars {
+    repeated Star stars = 1;
+}
+
+/**
+ * The only message we actually send to clients
+ */
+message Tick {
+    oneof payload {
+        Stars stars = 1;
+    }
+}
