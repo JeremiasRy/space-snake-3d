@@ -39,7 +39,7 @@ scene.fog = new THREE.Fog(0x000000, 1000, 10000);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
-const starGeometry = new THREE.SphereGeometry(1, 16, 16);
+const starGeometry = new THREE.SphereGeometry(5, 16, 16);
 const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 20000);
 starMesh.frustumCulled = false;

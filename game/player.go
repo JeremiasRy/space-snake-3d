@@ -11,11 +11,12 @@ import (
 
 const (
 	BASE_ROT_SPEED          float32 = 0.00001
-	BASE_ACCELERATION_SPEED float32 = 0.05
+	BASE_ACCELERATION_SPEED float32 = 0.005
 	JERK_FACTOR             float32 = 0.01
 	ROT_JERK_FACTOR         float32 = 0.0001
-	MAX_SPEED               float32 = 5.0
-	FRICTION                float32 = 0.95
+	MAX_ROT_SPEED           float32 = 0.05
+	MAX_SPEED               float32 = 50.0
+	FRICTION                float32 = 0.9
 )
 
 type Input int32
@@ -97,74 +98,80 @@ func (p *Player) ReadFrom() {
 	}
 }
 func (p *Player) applyInput() {
-	if p.input&FLAG_MOVE_UP == FLAG_MOVE_UP {
-		p.heldMap[FLAG_MOVE_UP]++
+	isPitching := false
 
+	if p.input&FLAG_MOVE_UP == FLAG_MOVE_UP {
+		isPitching = true
+		p.heldMap[FLAG_MOVE_UP]++
 		framesHeld := p.heldMap[FLAG_MOVE_UP]
 
-		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
-
-		p.pitch += currentAccel
-	} else {
-		if p.heldMap[FLAG_MOVE_UP] > 0 {
-			p.heldMap[FLAG_MOVE_UP]--
-		}
-		p.pitch *= FRICTION
+		p.pitch += BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+	} else if p.heldMap[FLAG_MOVE_UP] > 0 {
+		p.heldMap[FLAG_MOVE_UP]--
 	}
 
 	if p.input&FLAG_MOVE_DOWN == FLAG_MOVE_DOWN {
+		isPitching = true
 		p.heldMap[FLAG_MOVE_DOWN]++
-
 		framesHeld := p.heldMap[FLAG_MOVE_DOWN]
 
-		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
-
-		p.pitch -= currentAccel
-	} else {
-		if p.heldMap[FLAG_MOVE_DOWN] > 0 {
-			p.heldMap[FLAG_MOVE_DOWN]--
-		}
-		p.pitch *= FRICTION
+		p.pitch -= BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+	} else if p.heldMap[FLAG_MOVE_DOWN] > 0 {
+		p.heldMap[FLAG_MOVE_DOWN]--
 	}
 
-	if p.input&FLAG_MOVE_LEFT == FLAG_MOVE_LEFT {
-		p.heldMap[FLAG_MOVE_LEFT]++
-
-		framesHeld := p.heldMap[FLAG_MOVE_LEFT]
-
-		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
-
-		p.yaw += currentAccel
-	} else {
-		if p.heldMap[FLAG_MOVE_LEFT] > 0 {
-			p.heldMap[FLAG_MOVE_LEFT]--
+	if !isPitching {
+		p.pitch *= FRICTION
+		if p.pitch > -0.001 && p.pitch < 0.001 {
+			p.pitch = 0
 		}
-		p.yaw *= FRICTION
+	}
+
+	if p.pitch > MAX_ROT_SPEED {
+		p.pitch = MAX_ROT_SPEED
+	} else if p.pitch < -MAX_ROT_SPEED {
+		p.pitch = -MAX_ROT_SPEED
+	}
+
+	isYawing := false
+
+	if p.input&FLAG_MOVE_LEFT == FLAG_MOVE_LEFT {
+		isYawing = true
+		p.heldMap[FLAG_MOVE_LEFT]++
+		framesHeld := p.heldMap[FLAG_MOVE_LEFT]
+		p.yaw += BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+	} else if p.heldMap[FLAG_MOVE_LEFT] > 0 {
+		p.heldMap[FLAG_MOVE_LEFT]--
 	}
 
 	if p.input&FLAG_MOVE_RIGHT == FLAG_MOVE_RIGHT {
+		isYawing = true
 		p.heldMap[FLAG_MOVE_RIGHT]++
-
 		framesHeld := p.heldMap[FLAG_MOVE_RIGHT]
+		p.yaw -= BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+	} else if p.heldMap[FLAG_MOVE_RIGHT] > 0 {
+		p.heldMap[FLAG_MOVE_RIGHT]--
+	}
 
-		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
-
-		p.yaw -= currentAccel
-	} else {
-		if p.heldMap[FLAG_MOVE_RIGHT] > 0 {
-			p.heldMap[FLAG_MOVE_RIGHT]--
-		}
+	if !isYawing {
 		p.yaw *= FRICTION
+		if p.yaw > -0.001 && p.yaw < 0.001 {
+			p.yaw = 0
+		}
+	}
+
+	if p.yaw > MAX_ROT_SPEED {
+		p.yaw = MAX_ROT_SPEED
+	} else if p.yaw < -MAX_ROT_SPEED {
+		p.yaw = -MAX_ROT_SPEED
 	}
 
 	if p.input&FLAG_SPEED_UP == FLAG_SPEED_UP {
 		p.heldMap[FLAG_SPEED_UP]++
-
 		framesHeld := p.heldMap[FLAG_SPEED_UP]
 
-		currentAccel := BASE_ACCELERATION_SPEED + (framesHeld * JERK_FACTOR)
-
-		p.speed += currentAccel
+		accel := BASE_ACCELERATION_SPEED + (framesHeld * JERK_FACTOR)
+		p.speed = min(p.speed+accel, MAX_SPEED)
 
 	} else {
 		if p.heldMap[FLAG_SPEED_UP] > 0 {
@@ -177,6 +184,7 @@ func (p *Player) applyInput() {
 	yawRot := mgl32.QuatRotate(p.yaw, mgl32.Vec3{0, 1, 0})
 
 	delta := yawRot.Mul(pitchRot)
+
 	p.r = p.r.Mul(delta).Normalize()
 
 	forward := p.r.Rotate(mgl32.Vec3{0, 0, -1})
