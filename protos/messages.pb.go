@@ -84,20 +84,79 @@ func (x *Vector3) GetZ() float32 {
 }
 
 // *
+type GameObjectDefinition struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Position      *Vector3               `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
+	Rotation      *Vector3               `protobuf:"bytes,3,opt,name=rotation,proto3" json:"rotation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameObjectDefinition) Reset() {
+	*x = GameObjectDefinition{}
+	mi := &file_messages_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameObjectDefinition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameObjectDefinition) ProtoMessage() {}
+
+func (x *GameObjectDefinition) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameObjectDefinition.ProtoReflect.Descriptor instead.
+func (*GameObjectDefinition) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GameObjectDefinition) GetId() int32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *GameObjectDefinition) GetPosition() *Vector3 {
+	if x != nil {
+		return x.Position
+	}
+	return nil
+}
+
+func (x *GameObjectDefinition) GetRotation() *Vector3 {
+	if x != nil {
+		return x.Rotation
+	}
+	return nil
+}
+
+// *
 // star definition
 type Star struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            float32                `protobuf:"fixed32,1,opt,name=id,proto3" json:"id,omitempty"`
-	Position      *Vector3               `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
-	Rotation      *Vector3               `protobuf:"bytes,3,opt,name=rotation,proto3" json:"rotation,omitempty"`
-	Active        bool                   `protobuf:"varint,4,opt,name=active,proto3" json:"active,omitempty"`
+	State         *GameObjectDefinition  `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	Active        bool                   `protobuf:"varint,2,opt,name=active,proto3" json:"active,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Star) Reset() {
 	*x = Star{}
-	mi := &file_messages_proto_msgTypes[1]
+	mi := &file_messages_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -109,7 +168,7 @@ func (x *Star) String() string {
 func (*Star) ProtoMessage() {}
 
 func (x *Star) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[1]
+	mi := &file_messages_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -122,26 +181,12 @@ func (x *Star) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Star.ProtoReflect.Descriptor instead.
 func (*Star) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{1}
+	return file_messages_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Star) GetId() float32 {
+func (x *Star) GetState() *GameObjectDefinition {
 	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *Star) GetPosition() *Vector3 {
-	if x != nil {
-		return x.Position
-	}
-	return nil
-}
-
-func (x *Star) GetRotation() *Vector3 {
-	if x != nil {
-		return x.Rotation
+		return x.State
 	}
 	return nil
 }
@@ -154,6 +199,95 @@ func (x *Star) GetActive() bool {
 }
 
 // *
+type Player struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *GameObjectDefinition  `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Player) Reset() {
+	*x = Player{}
+	mi := &file_messages_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Player) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Player) ProtoMessage() {}
+
+func (x *Player) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Player.ProtoReflect.Descriptor instead.
+func (*Player) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Player) GetState() *GameObjectDefinition {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type WhoAreYou struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TargetId      int32                  `protobuf:"varint,1,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WhoAreYou) Reset() {
+	*x = WhoAreYou{}
+	mi := &file_messages_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WhoAreYou) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WhoAreYou) ProtoMessage() {}
+
+func (x *WhoAreYou) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WhoAreYou.ProtoReflect.Descriptor instead.
+func (*WhoAreYou) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *WhoAreYou) GetTargetId() int32 {
+	if x != nil {
+		return x.TargetId
+	}
+	return 0
+}
+
+// *
 type Stars struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Stars         []*Star                `protobuf:"bytes,1,rep,name=stars,proto3" json:"stars,omitempty"`
@@ -163,7 +297,7 @@ type Stars struct {
 
 func (x *Stars) Reset() {
 	*x = Stars{}
-	mi := &file_messages_proto_msgTypes[2]
+	mi := &file_messages_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +309,7 @@ func (x *Stars) String() string {
 func (*Stars) ProtoMessage() {}
 
 func (x *Stars) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[2]
+	mi := &file_messages_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +322,7 @@ func (x *Stars) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stars.ProtoReflect.Descriptor instead.
 func (*Stars) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{2}
+	return file_messages_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Stars) GetStars() []*Star {
@@ -199,12 +333,120 @@ func (x *Stars) GetStars() []*Star {
 }
 
 // *
+type GameTick struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Players       []*Player              `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
+	StarsUpdate   []*Stars               `protobuf:"bytes,2,rep,name=stars_update,json=starsUpdate,proto3" json:"stars_update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameTick) Reset() {
+	*x = GameTick{}
+	mi := &file_messages_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameTick) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameTick) ProtoMessage() {}
+
+func (x *GameTick) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameTick.ProtoReflect.Descriptor instead.
+func (*GameTick) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GameTick) GetPlayers() []*Player {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+func (x *GameTick) GetStarsUpdate() []*Stars {
+	if x != nil {
+		return x.StarsUpdate
+	}
+	return nil
+}
+
+// *
+type Input struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TargetId      int32                  `protobuf:"varint,1,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	Input         int32                  `protobuf:"varint,2,opt,name=input,proto3" json:"input,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Input) Reset() {
+	*x = Input{}
+	mi := &file_messages_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Input) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Input) ProtoMessage() {}
+
+func (x *Input) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Input.ProtoReflect.Descriptor instead.
+func (*Input) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Input) GetTargetId() int32 {
+	if x != nil {
+		return x.TargetId
+	}
+	return 0
+}
+
+func (x *Input) GetInput() int32 {
+	if x != nil {
+		return x.Input
+	}
+	return 0
+}
+
+// *
 // The only message we actually send to clients
 type Tick struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
 	//
-	//	*Tick_Stars
+	//	*Tick_StarsInit
+	//	*Tick_YouInit
+	//	*Tick_Tick
 	Payload       isTick_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -212,7 +454,7 @@ type Tick struct {
 
 func (x *Tick) Reset() {
 	*x = Tick{}
-	mi := &file_messages_proto_msgTypes[3]
+	mi := &file_messages_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -224,7 +466,7 @@ func (x *Tick) String() string {
 func (*Tick) ProtoMessage() {}
 
 func (x *Tick) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[3]
+	mi := &file_messages_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -237,7 +479,7 @@ func (x *Tick) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tick.ProtoReflect.Descriptor instead.
 func (*Tick) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{3}
+	return file_messages_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Tick) GetPayload() isTick_Payload {
@@ -247,10 +489,28 @@ func (x *Tick) GetPayload() isTick_Payload {
 	return nil
 }
 
-func (x *Tick) GetStars() *Stars {
+func (x *Tick) GetStarsInit() *Stars {
 	if x != nil {
-		if x, ok := x.Payload.(*Tick_Stars); ok {
-			return x.Stars
+		if x, ok := x.Payload.(*Tick_StarsInit); ok {
+			return x.StarsInit
+		}
+	}
+	return nil
+}
+
+func (x *Tick) GetYouInit() *WhoAreYou {
+	if x != nil {
+		if x, ok := x.Payload.(*Tick_YouInit); ok {
+			return x.YouInit
+		}
+	}
+	return nil
+}
+
+func (x *Tick) GetTick() *GameTick {
+	if x != nil {
+		if x, ok := x.Payload.(*Tick_Tick); ok {
+			return x.Tick
 		}
 	}
 	return nil
@@ -260,11 +520,23 @@ type isTick_Payload interface {
 	isTick_Payload()
 }
 
-type Tick_Stars struct {
-	Stars *Stars `protobuf:"bytes,1,opt,name=stars,proto3,oneof"`
+type Tick_StarsInit struct {
+	StarsInit *Stars `protobuf:"bytes,1,opt,name=stars_init,json=starsInit,proto3,oneof"`
 }
 
-func (*Tick_Stars) isTick_Payload() {}
+type Tick_YouInit struct {
+	YouInit *WhoAreYou `protobuf:"bytes,2,opt,name=you_init,json=youInit,proto3,oneof"`
+}
+
+type Tick_Tick struct {
+	Tick *GameTick `protobuf:"bytes,3,opt,name=tick,proto3,oneof"`
+}
+
+func (*Tick_StarsInit) isTick_Payload() {}
+
+func (*Tick_YouInit) isTick_Payload() {}
+
+func (*Tick_Tick) isTick_Payload() {}
 
 var File_messages_proto protoreflect.FileDescriptor
 
@@ -274,16 +546,32 @@ const file_messages_proto_rawDesc = "" +
 	"\aVector3\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x02R\x01y\x12\f\n" +
-	"\x01z\x18\x03 \x01(\x02R\x01z\"z\n" +
-	"\x04Star\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x02R\x02id\x12$\n" +
+	"\x01z\x18\x03 \x01(\x02R\x01z\"r\n" +
+	"\x14GameObjectDefinition\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x12$\n" +
 	"\bposition\x18\x02 \x01(\v2\b.Vector3R\bposition\x12$\n" +
-	"\brotation\x18\x03 \x01(\v2\b.Vector3R\brotation\x12\x16\n" +
-	"\x06active\x18\x04 \x01(\bR\x06active\"$\n" +
+	"\brotation\x18\x03 \x01(\v2\b.Vector3R\brotation\"K\n" +
+	"\x04Star\x12+\n" +
+	"\x05state\x18\x01 \x01(\v2\x15.GameObjectDefinitionR\x05state\x12\x16\n" +
+	"\x06active\x18\x02 \x01(\bR\x06active\"5\n" +
+	"\x06Player\x12+\n" +
+	"\x05state\x18\x01 \x01(\v2\x15.GameObjectDefinitionR\x05state\"(\n" +
+	"\tWhoAreYou\x12\x1b\n" +
+	"\ttarget_id\x18\x01 \x01(\x05R\btargetId\"$\n" +
 	"\x05Stars\x12\x1b\n" +
-	"\x05stars\x18\x01 \x03(\v2\x05.StarR\x05stars\"1\n" +
-	"\x04Tick\x12\x1e\n" +
-	"\x05stars\x18\x01 \x01(\v2\x06.StarsH\x00R\x05starsB\t\n" +
+	"\x05stars\x18\x01 \x03(\v2\x05.StarR\x05stars\"X\n" +
+	"\bGameTick\x12!\n" +
+	"\aplayers\x18\x01 \x03(\v2\a.PlayerR\aplayers\x12)\n" +
+	"\fstars_update\x18\x02 \x03(\v2\x06.StarsR\vstarsUpdate\":\n" +
+	"\x05Input\x12\x1b\n" +
+	"\ttarget_id\x18\x01 \x01(\x05R\btargetId\x12\x14\n" +
+	"\x05input\x18\x02 \x01(\x05R\x05input\"\x84\x01\n" +
+	"\x04Tick\x12'\n" +
+	"\n" +
+	"stars_init\x18\x01 \x01(\v2\x06.StarsH\x00R\tstarsInit\x12'\n" +
+	"\byou_init\x18\x02 \x01(\v2\n" +
+	".WhoAreYouH\x00R\ayouInit\x12\x1f\n" +
+	"\x04tick\x18\x03 \x01(\v2\t.GameTickH\x00R\x04tickB\t\n" +
 	"\apayloadB\tZ\a/protosb\x06proto3"
 
 var (
@@ -298,23 +586,34 @@ func file_messages_proto_rawDescGZIP() []byte {
 	return file_messages_proto_rawDescData
 }
 
-var file_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_messages_proto_goTypes = []any{
-	(*Vector3)(nil), // 0: Vector3
-	(*Star)(nil),    // 1: Star
-	(*Stars)(nil),   // 2: Stars
-	(*Tick)(nil),    // 3: Tick
+	(*Vector3)(nil),              // 0: Vector3
+	(*GameObjectDefinition)(nil), // 1: GameObjectDefinition
+	(*Star)(nil),                 // 2: Star
+	(*Player)(nil),               // 3: Player
+	(*WhoAreYou)(nil),            // 4: WhoAreYou
+	(*Stars)(nil),                // 5: Stars
+	(*GameTick)(nil),             // 6: GameTick
+	(*Input)(nil),                // 7: Input
+	(*Tick)(nil),                 // 8: Tick
 }
 var file_messages_proto_depIdxs = []int32{
-	0, // 0: Star.position:type_name -> Vector3
-	0, // 1: Star.rotation:type_name -> Vector3
-	1, // 2: Stars.stars:type_name -> Star
-	2, // 3: Tick.stars:type_name -> Stars
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: GameObjectDefinition.position:type_name -> Vector3
+	0,  // 1: GameObjectDefinition.rotation:type_name -> Vector3
+	1,  // 2: Star.state:type_name -> GameObjectDefinition
+	1,  // 3: Player.state:type_name -> GameObjectDefinition
+	2,  // 4: Stars.stars:type_name -> Star
+	3,  // 5: GameTick.players:type_name -> Player
+	5,  // 6: GameTick.stars_update:type_name -> Stars
+	5,  // 7: Tick.stars_init:type_name -> Stars
+	4,  // 8: Tick.you_init:type_name -> WhoAreYou
+	6,  // 9: Tick.tick:type_name -> GameTick
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_messages_proto_init() }
@@ -322,8 +621,10 @@ func file_messages_proto_init() {
 	if File_messages_proto != nil {
 		return
 	}
-	file_messages_proto_msgTypes[3].OneofWrappers = []any{
-		(*Tick_Stars)(nil),
+	file_messages_proto_msgTypes[8].OneofWrappers = []any{
+		(*Tick_StarsInit)(nil),
+		(*Tick_YouInit)(nil),
+		(*Tick_Tick)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -331,7 +632,7 @@ func file_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_messages_proto_rawDesc), len(file_messages_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

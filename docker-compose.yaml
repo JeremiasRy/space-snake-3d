@@ -1,0 +1,26 @@
+services:
+  game:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=development
+    develop:
+      watch:
+        - action: rebuild
+          path: go.mod
+
+        - action: sync+restart
+          path: ./messages.proto
+          target: /app/messages.proto
+
+        - action: sync+restart
+          path: ./
+          target: /app
+          ignore:
+            - static/proto/
+            - protos/proto/
+            - .git/
+    command: [ "./entrypoint.sh" ]

@@ -1,26 +1,57 @@
 package game
 
-import "github.com/go-gl/mathgl/mgl32"
+import (
+	"log"
 
-type PlayerId float32
+	"github.com/gorilla/websocket"
+)
+
 type Player struct {
-	ID  PlayerId
-	pos mgl32.Vec3
-	rot mgl32.Vec3
+	GameObject
+	conn  *websocket.Conn
+	send  chan []byte
+	state *State
+	input int32
 }
 
-func (p *Player) Position() mgl32.Vec3 {
-	return p.pos
+func NewPlayer(conn *websocket.Conn, s *State) *Player {
+	p := &Player{
+		conn:  conn,
+		send:  make(chan []byte),
+		input: 0,
+	}
+	s.join <- p
+	p.state = s
+
+	return p
 }
 
-func (p *Player) Direction() mgl32.Vec3 {
-	return p.rot
+func (p *Player) WriteTo() {
+	defer func() {
+		p.conn.Close()
+	}()
+	for data := range p.send {
+		err := p.conn.WriteMessage(websocket.BinaryMessage, data)
+
+		if err != nil {
+			log.Printf("failed to write a message to client %s", err.Error())
+			return
+		}
+	}
 }
 
-func (p *Player) Move(speed float32) {
-	p.pos = p.pos.Add(p.rot.Mul(speed))
-}
+func (p *Player) ReadFrom() {
+	defer func() {
+		p.state.disconnect <- p
+		p.conn.Close()
+	}()
 
-func (p *Player) Rotate(q mgl32.Quat) {
-	p.rot = q.Rotate(p.rot)
+	for {
+		_, data, err := p.conn.ReadMessage()
+		if err != nil {
+			log.Printf("error while reading player: %d, %s", p.i, err.Error())
+			return
+		}
+		p.state.input <- data
+	}
 }

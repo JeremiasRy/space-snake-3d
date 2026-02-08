@@ -9,28 +9,68 @@ message Vector3 {
   float y = 2;
   float z = 3;
 }
+
+/**
+ *
+ */
+message GameObjectDefinition {
+  int32   id       = 1;
+  Vector3 position = 2;
+  Vector3 rotation = 3;
+}
+
 /**
  * star definition
  */
 message Star {
-    float id = 1;
-    Vector3 position = 2;
-    Vector3 rotation  = 3;
-    bool active = 4;
+  GameObjectDefinition state  = 1;
+  bool                 active = 2;
+}
+
+/**
+ *
+ */
+message Player {
+  GameObjectDefinition state = 1;
+}
+
+/*
+ *
+ */
+message WhoAreYou {
+  int32 target_id = 1;
 }
 
 /**
  *
  */
 message Stars {
-    repeated Star stars = 1;
+  repeated Star stars = 1;
+}
+
+/**
+ *
+ */
+message GameTick {
+  repeated Player players      = 1;
+  repeated Stars  stars_update = 2;
+}
+
+/**
+ *
+ */
+message Input {
+  int32 target_id = 1;
+  int32 input     = 2;
 }
 
 /**
  * The only message we actually send to clients
  */
 message Tick {
-    oneof payload {
-        Stars stars = 1;
-    }
+  oneof payload {
+    Stars     stars_init = 1;
+    WhoAreYou you_init   = 2;
+    GameTick  tick       = 3;
+  }
 }

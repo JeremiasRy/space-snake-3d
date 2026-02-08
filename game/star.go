@@ -1,22 +1,20 @@
 package game
 
-import "github.com/go-gl/mathgl/mgl32"
-
 type Star struct {
-	id     float32
-	pos    mgl32.Vec3
-	rot    mgl32.Vec3
+	GameObject
 	active bool
 }
 
-func (p *Star) Position() mgl32.Vec3 {
-	return p.pos
+type NewStarOpts struct {
+	active bool
+	id     int32
 }
 
-func (p *Star) Direction() mgl32.Vec3 {
-	return p.rot
-}
-
-func (p *Star) Rotate(q mgl32.Quat) {
-	p.rot = q.Rotate(p.rot)
+func NewStar(opts NewStarOpts) *Star {
+	active, id := opts.active, opts.id
+	s := &Star{
+		active: active,
+	}
+	s.i = id
+	return s
 }

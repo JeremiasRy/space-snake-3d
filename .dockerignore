@@ -1,0 +1,6 @@
+.git
+bin
+game-server
+static/proto
+protos/proto
+node_modules
