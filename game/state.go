@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	WORLD_WIDTH  float32 = 100_000
-	WORLD_HEIGHT float32 = 100_000
-	WORLD_DEPTH  float32 = 100_000
+	WORLD_WIDTH  float32 = 10000
+	WORLD_HEIGHT float32 = 10000
+	WORLD_DEPTH  float32 = 10000
 
 	STAR_CAP    int = 20000
 	STAR_ACTIVE int = 10000
@@ -40,6 +40,20 @@ type State struct {
 
 func randomVec3() mgl32.Vec3 {
 	return [3]float32{rand.Float32()*WORLD_WIDTH - (WORLD_WIDTH / 2), rand.Float32()*WORLD_HEIGHT - (WORLD_HEIGHT / 2), rand.Float32()*WORLD_DEPTH - (WORLD_DEPTH / 2)}
+}
+
+func RandomQuat() mgl32.Quat {
+	x := rand.NormFloat64()
+	y := rand.NormFloat64()
+	z := rand.NormFloat64()
+	w := rand.NormFloat64()
+
+	q := mgl32.Quat{
+		W: float32(w),
+		V: mgl32.Vec3{float32(x), float32(y), float32(z)},
+	}
+
+	return q.Normalize()
 }
 
 func CreateState() *State {
@@ -89,6 +103,25 @@ func (s *State) ListenPlayers() {
 					continue
 				}
 				player.send <- data
+				stars := make([]*protos.Star, 0, STAR_CAP)
+
+				for _, s := range s.stars {
+					stars = append(stars, s.toProto())
+				}
+
+				data, err = proto.Marshal(&protos.Tick{
+					Payload: &protos.Tick_StarsInit{
+						StarsInit: &protos.Stars{Stars: stars},
+					},
+				})
+
+				if err != nil {
+					log.Printf("Failed to generate star initialization %s", err.Error())
+					s.disconnect <- player
+					continue
+				}
+
+				player.send <- data
 			}
 		case player := <-s.disconnect:
 			{
@@ -110,33 +143,49 @@ func (s *State) ListenPlayers() {
 	}
 }
 
-func (s *State) processEvents(events []InputEvent) {
-	for _, e := range events {
-		log.Printf("ID: %d, input: %d", e.playerId, e.input)
-	}
-}
-
 func (s *State) Tick() {
-	log.Print("Ticker started")
 	ticker := time.NewTicker(time.Second / 60)
 	defer ticker.Stop()
 
-	events := make([]InputEvent, 0, 100)
+	stars := make([]*protos.Star, 0, STAR_ACTIVE)
+	players := make([]*protos.Player, 0, len(s.players))
+
 	for range ticker.C {
-	Drain:
-		for {
-			select {
-			case input := <-s.events:
-				{
-					events = append(events, input)
-				}
-			default:
-				break Drain
+		for _, s := range s.stars {
+			if !s.active {
+				continue
 			}
+			stars = append(stars, s.toProto())
 		}
 
-		s.processEvents(events)
-		events = events[:0]
+		for p := range s.players {
+			p.applyInput()
+			players = append(players, p.toProto())
+		}
+
+		tick, err := proto.Marshal(&protos.Tick{
+			Payload: &protos.Tick_GameTick{
+				GameTick: &protos.GameTick{
+					Players: &protos.Players{
+						Players: players,
+					},
+					StarsUpdate: &protos.Stars{
+						Stars: stars,
+					},
+				},
+			},
+		})
+
+		if err != nil {
+			log.Fatalf("Failed to marshal game state %s", err.Error())
+		}
+
+		for p := range s.players {
+			p.send <- tick
+		}
+
+		stars = stars[:0]
+		players = players[:0]
 	}
 }
 

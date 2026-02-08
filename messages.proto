@@ -10,13 +10,20 @@ message Vector3 {
   float z = 3;
 }
 
+message Vector4 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
 /**
  *
  */
 message GameObjectDefinition {
   int32   id       = 1;
   Vector3 position = 2;
-  Vector3 rotation = 3;
+  Vector4 rotation = 3;
 }
 
 /**
@@ -51,9 +58,16 @@ message Stars {
 /**
  *
  */
+message Players {
+  repeated Player players = 1;
+}
+
+/**
+ *
+ */
 message GameTick {
-  repeated Player players      = 1;
-  repeated Stars  stars_update = 2;
+  Players players      = 1;
+  Stars   stars_update = 2;
 }
 
 /**
@@ -71,6 +85,6 @@ message Tick {
   oneof payload {
     Stars     stars_init = 1;
     WhoAreYou you_init   = 2;
-    GameTick  tick       = 3;
+    GameTick  game_tick  = 3;
   }
 }
