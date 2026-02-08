@@ -10,15 +10,22 @@ import (
 )
 
 const (
-	ROT_SPEED  float32 = 0.1
-	MOVE_SPEED float32 = 1
+	BASE_ROT_SPEED          float32 = 0.00001
+	BASE_ACCELERATION_SPEED float32 = 0.05
+	JERK_FACTOR             float32 = 0.01
+	ROT_JERK_FACTOR         float32 = 0.0001
+	MAX_SPEED               float32 = 5.0
+	FRICTION                float32 = 0.95
 )
 
+type Input int32
+
 const (
-	MOVE_UP    int32 = 1
-	MOVE_DOWN  int32 = 1 << 1
-	MOVE_LEFT  int32 = 1 << 2
-	MOVE_RIGHT int32 = 1 << 3
+	FLAG_MOVE_UP    Input = 1
+	FLAG_MOVE_DOWN  Input = 1 << 1
+	FLAG_MOVE_LEFT  Input = 1 << 2
+	FLAG_MOVE_RIGHT Input = 1 << 3
+	FLAG_SPEED_UP   Input = 1 << 4
 )
 
 type Player struct {
@@ -26,7 +33,14 @@ type Player struct {
 	conn  *websocket.Conn
 	send  chan []byte
 	state *State
-	input int32
+	input Input
+
+	speed float32
+	pitch float32
+	yaw   float32
+
+	// how many frames has input been down
+	heldMap map[Input]float32
 }
 
 func NewPlayer(conn *websocket.Conn, s *State) *Player {
@@ -34,6 +48,9 @@ func NewPlayer(conn *websocket.Conn, s *State) *Player {
 		conn:  conn,
 		send:  make(chan []byte),
 		input: 0,
+		speed: 1,
+
+		heldMap: map[Input]float32{},
 	}
 	s.join <- p
 	p.state = s
@@ -76,36 +93,94 @@ func (p *Player) ReadFrom() {
 			return
 		}
 
-		p.input = msg.Input
+		p.input = Input(msg.Input)
 	}
 }
 func (p *Player) applyInput() {
-	if p.input != 0 {
-		var pitchInput float32 = 0
-		var yawInput float32 = 0
+	if p.input&FLAG_MOVE_UP == FLAG_MOVE_UP {
+		p.heldMap[FLAG_MOVE_UP]++
 
-		if p.input&MOVE_UP == MOVE_UP {
-			pitchInput += ROT_SPEED
-		}
-		if p.input&MOVE_DOWN == MOVE_DOWN {
-			pitchInput -= ROT_SPEED
-		}
-		if p.input&MOVE_LEFT == MOVE_LEFT {
-			yawInput += ROT_SPEED
-		}
-		if p.input&MOVE_RIGHT == MOVE_RIGHT {
-			yawInput -= ROT_SPEED
-		}
+		framesHeld := p.heldMap[FLAG_MOVE_UP]
 
-		pitchRot := mgl32.QuatRotate(pitchInput, mgl32.Vec3{1, 0, 0})
-		yawRot := mgl32.QuatRotate(yawInput, mgl32.Vec3{0, 1, 0})
+		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
 
-		delta := yawRot.Mul(pitchRot)
-		p.r = p.r.Mul(delta).Normalize()
+		p.pitch += currentAccel
+	} else {
+		if p.heldMap[FLAG_MOVE_UP] > 0 {
+			p.heldMap[FLAG_MOVE_UP]--
+		}
+		p.pitch *= FRICTION
 	}
 
+	if p.input&FLAG_MOVE_DOWN == FLAG_MOVE_DOWN {
+		p.heldMap[FLAG_MOVE_DOWN]++
+
+		framesHeld := p.heldMap[FLAG_MOVE_DOWN]
+
+		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+
+		p.pitch -= currentAccel
+	} else {
+		if p.heldMap[FLAG_MOVE_DOWN] > 0 {
+			p.heldMap[FLAG_MOVE_DOWN]--
+		}
+		p.pitch *= FRICTION
+	}
+
+	if p.input&FLAG_MOVE_LEFT == FLAG_MOVE_LEFT {
+		p.heldMap[FLAG_MOVE_LEFT]++
+
+		framesHeld := p.heldMap[FLAG_MOVE_LEFT]
+
+		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+
+		p.yaw += currentAccel
+	} else {
+		if p.heldMap[FLAG_MOVE_LEFT] > 0 {
+			p.heldMap[FLAG_MOVE_LEFT]--
+		}
+		p.yaw *= FRICTION
+	}
+
+	if p.input&FLAG_MOVE_RIGHT == FLAG_MOVE_RIGHT {
+		p.heldMap[FLAG_MOVE_RIGHT]++
+
+		framesHeld := p.heldMap[FLAG_MOVE_RIGHT]
+
+		currentAccel := BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
+
+		p.yaw -= currentAccel
+	} else {
+		if p.heldMap[FLAG_MOVE_RIGHT] > 0 {
+			p.heldMap[FLAG_MOVE_RIGHT]--
+		}
+		p.yaw *= FRICTION
+	}
+
+	if p.input&FLAG_SPEED_UP == FLAG_SPEED_UP {
+		p.heldMap[FLAG_SPEED_UP]++
+
+		framesHeld := p.heldMap[FLAG_SPEED_UP]
+
+		currentAccel := BASE_ACCELERATION_SPEED + (framesHeld * JERK_FACTOR)
+
+		p.speed += currentAccel
+
+	} else {
+		if p.heldMap[FLAG_SPEED_UP] > 0 {
+			p.heldMap[FLAG_SPEED_UP]--
+		}
+		p.speed *= FRICTION
+	}
+
+	pitchRot := mgl32.QuatRotate(p.pitch, mgl32.Vec3{1, 0, 0})
+	yawRot := mgl32.QuatRotate(p.yaw, mgl32.Vec3{0, 1, 0})
+
+	delta := yawRot.Mul(pitchRot)
+	p.r = p.r.Mul(delta).Normalize()
+
 	forward := p.r.Rotate(mgl32.Vec3{0, 0, -1})
-	p.p = p.p.Add(forward.Mul(MOVE_SPEED))
+	p.p = p.p.Add(forward.Mul(p.speed))
 }
 
 func (p *Player) toProto() *protos.Player {

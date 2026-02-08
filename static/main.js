@@ -55,6 +55,7 @@ const keys = {
     ArrowDown: 1 << 1,
     ArrowLeft: 1 << 2,
     ArrowRight: 1 << 3,
+    [" "]: 1 << 4 // space bar :D
 }
 
 let input = 0
