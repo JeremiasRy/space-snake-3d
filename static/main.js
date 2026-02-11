@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { Input, KeyboardInput, Tick } from "./proto/protocol.js"
+import { Input, Tick } from "./proto/protocol.js"
 import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./constants.js";
 /**
  * @typedef {Object} Vector3
@@ -37,6 +37,7 @@ import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./c
 /**
  * @type {Star[][][]}
  */
+
 const PLANE_VIEW_BOXES = Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => { return Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => []) })
 const STAR_ACTIVE = 1.0
 const STAR_INACTIVE = 0.0
@@ -52,39 +53,64 @@ const activeArray = new Float32Array(2_000_000).fill(STAR_ACTIVE);
 const starGeometry = new THREE.TetrahedronGeometry(10);
 starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeArray, 1));
 const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
+/**
+ * @type {Map<number, THREE.Box3Helper>}
+ */
+const playersMap = new Map()
+/**
+ * @param {Player} player 
+ */
+const newPlayer = (player) => {
+    const { position, id, rotation } = player.state
+    const geometry = new THREE.BoxGeometry(20, 20, 20);
 
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        wireframe: true
+    });
 
+    const mesh = new THREE.Mesh(geometry, material);
 
+    mesh.position.set(position.x, position.y, position.z);
+
+    const { x, y, z, w } = rotation;
+    mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
+
+    scene.add(mesh);
+    playersMap.set(id, mesh);
+    return mesh;
+}
+
+starMesh.frustumCulled = false;
 starMaterial.onBeforeCompile = (shader) => {
     shader.uniforms.uPlayerPos = { value: new THREE.Vector3() };
 
     starMaterial.userData.shader = shader;
 
     shader.vertexShader = `
-    uniform vec3 uPlayerPos;
-    attribute float aActive;
-  ` + shader.vertexShader;
+        uniform vec3 uPlayerPos;
+        attribute float aActive;
+    ` + shader.vertexShader;
 
     shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
         `
-    #include <begin_vertex>
-    
-    float scale = aActive;
-    float renderDistance = ${PLANE_VIEW_BOX_SIZE * 5}.0;
-    vec3 instancePos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-    float dist = distance(instancePos, uPlayerPos);
-    
-    if (dist > renderDistance) {
-        scale = 0.0;
-    }
+        #include <begin_vertex>
+        
+        float scale = aActive;
+        float renderDistance = ${PLANE_VIEW_BOX_SIZE * 5}.0;
+        vec3 instancePos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+        float dist = distance(instancePos, uPlayerPos);
+        
+        if (dist > renderDistance) {
+            scale = 0.0;
+        }
 
-    transformed *= scale;
-    `
+        transformed *= scale;
+        `
     );
 };
-const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
-starMesh.frustumCulled = false;
 
 const dummyObj = new THREE.Object3D();
 scene.add(starMesh)
@@ -97,7 +123,8 @@ const keys = {
     ArrowDown: 1 << 1,
     ArrowLeft: 1 << 2,
     ArrowRight: 1 << 3,
-    [" "]: 1 << 4 // space bar :D
+    z: 1 << 4,
+    x: 1 << 5
 }
 
 let input = 0
@@ -122,7 +149,37 @@ const collisionCheck = () => {
  * @returns 
  */
 const animationLoop = ({ players, starsUpdate }) => {
-    const me = players.players.find((p) => p.state.id === targetId) ?? null
+    /**
+     * @type {Player | null}
+     */
+    let me = null
+
+    const allIds = new Set(playersMap.keys())
+
+    for (const player of players.players) {
+        const { id, position, rotation } = player.state
+        if (id === targetId) {
+            me = player
+        }
+
+        allIds.delete(id)
+        let graphic = playersMap.get(id)
+        if (graphic === undefined) {
+            graphic = newPlayer(player)
+        }
+
+        graphic.position.x = position.x
+        graphic.position.y = position.y
+        graphic.position.z = position.z
+
+        const { x, y, z, w } = rotation
+        graphic.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+    }
+
+    for (const id of allIds) {
+        scene.remove(players.get(id))
+        delete players[id]
+    }
 
     if (me === null) {
         return
@@ -130,10 +187,20 @@ const animationLoop = ({ players, starsUpdate }) => {
 
     const { state } = me
     const { position, rotation } = state
+    const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
 
-    camera.position.x = position.x
-    camera.position.y = position.y
-    camera.position.z = position.z
+    const cameraOffset = new THREE.Vector3(0, 20, 100);
+    cameraOffset.applyQuaternion(playerRot);
+
+    camera.position.x = position.x + cameraOffset.x;
+    camera.position.y = position.y + cameraOffset.y;
+    camera.position.z = position.z + cameraOffset.z;
+
+    const playerUp = new THREE.Vector3(0, 1, 0);
+    playerUp.applyQuaternion(playerRot);
+
+    camera.up.copy(playerUp);
+    camera.lookAt(position.x, position.y, position.z);
 
     currentPlaneViewBox = [
         Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE),
@@ -144,7 +211,6 @@ const animationLoop = ({ players, starsUpdate }) => {
         starMaterial.userData.shader.uniforms.uPlayerPos.value.copy(position);
     }
 
-    camera.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
     collisionCheck()
     renderer.render(scene, camera)
 }

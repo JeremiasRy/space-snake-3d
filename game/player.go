@@ -15,8 +15,8 @@ const (
 	JERK_FACTOR             float32 = 0.01
 	ROT_JERK_FACTOR         float32 = 0.0001
 	MAX_ROT_SPEED           float32 = 0.05
-	MAX_SPEED               float32 = 50.0
-	FRICTION                float32 = 0.9
+	MAX_SPEED               float32 = 100.0
+	ROT_FRICTION            float32 = 0.9
 )
 
 type Input int32
@@ -27,6 +27,7 @@ const (
 	FLAG_MOVE_LEFT  Input = 1 << 2
 	FLAG_MOVE_RIGHT Input = 1 << 3
 	FLAG_SPEED_UP   Input = 1 << 4
+	FLAG_BRAKE      Input = 1 << 5
 )
 
 type Player struct {
@@ -39,6 +40,7 @@ type Player struct {
 	speed float32
 	pitch float32
 	yaw   float32
+	brake float32
 
 	// how many frames has input been down
 	heldMap map[Input]float32
@@ -118,7 +120,7 @@ func (p *Player) applyInput() {
 
 		p.pitch += BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
 	} else if p.heldMap[FLAG_MOVE_UP] > 0 {
-		p.heldMap[FLAG_MOVE_UP]--
+		p.heldMap[FLAG_MOVE_UP] = 0
 	}
 
 	if p.input&FLAG_MOVE_DOWN == FLAG_MOVE_DOWN {
@@ -128,11 +130,11 @@ func (p *Player) applyInput() {
 
 		p.pitch -= BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
 	} else if p.heldMap[FLAG_MOVE_DOWN] > 0 {
-		p.heldMap[FLAG_MOVE_DOWN]--
+		p.heldMap[FLAG_MOVE_DOWN] = 0
 	}
 
 	if !isPitching {
-		p.pitch *= FRICTION
+		p.pitch *= ROT_FRICTION
 		if p.pitch > -0.001 && p.pitch < 0.001 {
 			p.pitch = 0
 		}
@@ -152,7 +154,7 @@ func (p *Player) applyInput() {
 		framesHeld := p.heldMap[FLAG_MOVE_LEFT]
 		p.yaw += BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
 	} else if p.heldMap[FLAG_MOVE_LEFT] > 0 {
-		p.heldMap[FLAG_MOVE_LEFT]--
+		p.heldMap[FLAG_MOVE_LEFT] = 0
 	}
 
 	if p.input&FLAG_MOVE_RIGHT == FLAG_MOVE_RIGHT {
@@ -165,7 +167,7 @@ func (p *Player) applyInput() {
 	}
 
 	if !isYawing {
-		p.yaw *= FRICTION
+		p.yaw *= ROT_FRICTION
 		if p.yaw > -0.001 && p.yaw < 0.001 {
 			p.yaw = 0
 		}
@@ -177,18 +179,23 @@ func (p *Player) applyInput() {
 		p.yaw = -MAX_ROT_SPEED
 	}
 
+	if p.input&FLAG_BRAKE == FLAG_BRAKE {
+		p.brake = max(p.brake-0.001, 0)
+	} else {
+		p.brake = 1
+	}
+
 	if p.input&FLAG_SPEED_UP == FLAG_SPEED_UP {
 		p.heldMap[FLAG_SPEED_UP]++
 		framesHeld := p.heldMap[FLAG_SPEED_UP]
 
 		accel := BASE_ACCELERATION_SPEED + (framesHeld * JERK_FACTOR)
 		p.speed = min(p.speed+accel, MAX_SPEED)
-
 	} else {
 		if p.heldMap[FLAG_SPEED_UP] > 0 {
-			p.heldMap[FLAG_SPEED_UP]--
+			p.heldMap[FLAG_SPEED_UP] = 0
 		}
-		p.speed *= FRICTION
+		p.speed *= p.brake
 	}
 
 	pitchRot := mgl32.QuatRotate(p.pitch, mgl32.Vec3{1, 0, 0})
