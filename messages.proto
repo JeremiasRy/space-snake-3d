@@ -10,6 +10,9 @@ message Vector3 {
   float z = 3;
 }
 
+/**
+ * quat
+ */
 message Vector4 {
   float x = 1;
   float y = 2;
@@ -73,9 +76,25 @@ message GameTick {
 /**
  *
  */
-message Input {
+message KeyboardInput {
+  int32 input = 2;
+}
+
+/**
+ *
+ */
+message StarTouch {
   int32 target_id = 1;
-  int32 input     = 2;
+}
+
+/**
+ *
+ */
+message Input {
+  oneof payload {
+    KeyboardInput key_input  = 1;
+    StarTouch     star_touch = 2;
+  }
 }
 
 /**

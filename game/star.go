@@ -4,7 +4,9 @@ import "space-snake-3d/protos"
 
 type Star struct {
 	GameObject
-	active bool
+	active     bool
+	sendUpdate bool
+	protoCache *protos.Star
 }
 
 type NewStarOpts struct {
@@ -15,15 +17,19 @@ type NewStarOpts struct {
 func NewStar(opts NewStarOpts) *Star {
 	active, id := opts.active, opts.id
 	s := &Star{
-		active: active,
+		active:     active,
+		sendUpdate: false,
 	}
 	s.i = id
 	return s
 }
 
 func (s *Star) toProto() *protos.Star {
-	return &protos.Star{
-		State:  s.GameObject.toProto(),
-		Active: s.active,
+	if s.protoCache == nil {
+		s.protoCache = &protos.Star{}
 	}
+
+	s.protoCache.Active = s.active
+	s.protoCache.State = s.GameObject.toProto()
+	return s.protoCache
 }

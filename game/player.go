@@ -42,12 +42,14 @@ type Player struct {
 
 	// how many frames has input been down
 	heldMap map[Input]float32
+
+	protoCache *protos.Player
 }
 
 func NewPlayer(conn *websocket.Conn, s *State) *Player {
 	p := &Player{
 		conn:  conn,
-		send:  make(chan []byte),
+		send:  make(chan []byte, 64),
 		input: 0,
 		speed: 1,
 
@@ -94,7 +96,16 @@ func (p *Player) ReadFrom() {
 			return
 		}
 
-		p.input = Input(msg.Input)
+		switch msg := msg.Payload.(type) {
+		case *protos.Input_KeyInput:
+			{
+				p.input = Input(msg.KeyInput.Input)
+			}
+		case *protos.Input_StarTouch:
+			{
+
+			}
+		}
 	}
 }
 func (p *Player) applyInput() {
@@ -192,7 +203,10 @@ func (p *Player) applyInput() {
 }
 
 func (p *Player) toProto() *protos.Player {
-	return &protos.Player{
-		State: p.GameObject.toProto(),
+	if p.protoCache == nil {
+		p.protoCache = &protos.Player{}
 	}
+
+	p.protoCache.State = p.GameObject.toProto()
+	return p.protoCache
 }

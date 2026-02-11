@@ -1,6 +1,6 @@
 import * as THREE from "three"
-import { Input, Tick } from "./proto/protocol.js"
-
+import { Input, KeyboardInput, Tick } from "./proto/protocol.js"
+import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./constants.js";
 /**
  * @typedef {Object} Vector3
  * @property {number} x
@@ -34,21 +34,63 @@ import { Input, Tick } from "./proto/protocol.js"
  * @property {boolean} active
  */
 
+/**
+ * @type {Star[][][]}
+ */
+const PLANE_VIEW_BOXES = Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => { return Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => []) })
+const STAR_ACTIVE = 1.0
+const STAR_INACTIVE = 0.0
+
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 1000, 10000);
+scene.fog = new THREE.Fog(0x000000, 1000, 5000);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
 const renderer = new THREE.WebGLRenderer();
+
 renderer.setSize(window.innerWidth, window.innerHeight);
-const starGeometry = new THREE.SphereGeometry(5, 16, 16);
+
+const activeArray = new Float32Array(2_000_000).fill(STAR_ACTIVE);
+const starGeometry = new THREE.TetrahedronGeometry(10);
+starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeArray, 1));
 const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 20000);
+
+
+
+starMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uPlayerPos = { value: new THREE.Vector3() };
+
+    starMaterial.userData.shader = shader;
+
+    shader.vertexShader = `
+    uniform vec3 uPlayerPos;
+    attribute float aActive;
+  ` + shader.vertexShader;
+
+    shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `
+    #include <begin_vertex>
+    
+    float scale = aActive;
+    float renderDistance = ${PLANE_VIEW_BOX_SIZE * 5}.0;
+    vec3 instancePos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+    float dist = distance(instancePos, uPlayerPos);
+    
+    if (dist > renderDistance) {
+        scale = 0.0;
+    }
+
+    transformed *= scale;
+    `
+    );
+};
+const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
 starMesh.frustumCulled = false;
 
 const dummyObj = new THREE.Object3D();
 scene.add(starMesh)
 document.body.appendChild(renderer.domElement);
 
-const ws = new WebSocket("http://172.20.14.229:8000/ws")
+const ws = new WebSocket("/ws")
 
 const keys = {
     ArrowUp: 1,
@@ -61,12 +103,19 @@ const keys = {
 let input = 0
 /**
  * @type {number | null}
- */
+*/
 let targetId = null
+let currentPlaneViewBox = [0, 0]
 /**
- * @type {Star[]}
- */
-const stars = []
+ * @type {Star[] | null}
+*/
+let stars = null
+
+const collisionCheck = () => {
+    const [x, y] = currentPlaneViewBox
+    // console.log({ stars: PLANE_VIEW_BOXES[x][y] })
+}
+
 /**
  * 
  * @param {{players: {players: Player[]}, starsUpdate: {starsUpdate: []}}} tick
@@ -86,10 +135,20 @@ const animationLoop = ({ players, starsUpdate }) => {
     camera.position.y = position.y
     camera.position.z = position.z
 
-    camera.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    currentPlaneViewBox = [
+        Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE),
+        Math.floor((position.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
+    ];
 
+    if (starMaterial.userData.shader) {
+        starMaterial.userData.shader.uniforms.uPlayerPos.value.copy(position);
+    }
+
+    camera.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    collisionCheck()
     renderer.render(scene, camera)
 }
+
 
 /**
  * @param {KeyboardEvent} event 
@@ -117,8 +176,13 @@ const sendInput = () => {
     if (targetId === null) {
         return
     }
-    const i = Input.encode({ targetId, input }).finish()
-    ws.send(i)
+    const msg = {
+        keyInput: {
+            input
+        }
+    }
+    const i = Input.create(msg)
+    ws.send(Input.encode(i).finish())
 }
 /**
  * @param {Event} event
@@ -149,23 +213,25 @@ ws.addEventListener("message", async ({ data }) => {
                 window.addEventListener("keyup", handleUp)
                 break;
             case "starsInit":
-                stars.push(...message.starsInit.stars)
+                stars = message.starsInit.stars
+                console.log({ stars })
                 for (const star of stars) {
-                    const { position, rotation } = star.state
+                    const { id, position } = star.state
                     dummyObj.position.set(position.x, position.y, position.z);
-
-                    if (star.active === false) {
-                        dummyObj.scale.set(0, 0, 0);
-                    } else {
-                        dummyObj.scale.set(1, 1, 1);
-                    }
+                    const planeViewBoxX = Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
+                    const planeViewBoxY = Math.floor((position.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
 
                     dummyObj.updateMatrix();
-                    starMesh.setMatrixAt(star.state.id, dummyObj.matrix);
+                    starMesh.setMatrixAt(id, dummyObj.matrix);
+                    activeArray[id] = star.active ? STAR_ACTIVE : STAR_INACTIVE
+                    PLANE_VIEW_BOXES[planeViewBoxX][planeViewBoxY].push(star)
                 }
                 starMesh.instanceMatrix.needsUpdate = true
                 break;
             case "gameTick":
+                if (stars === null) {
+                    return
+                }
                 animationLoop(message.gameTick)
                 break;
         }

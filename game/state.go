@@ -7,35 +7,48 @@ import (
 	"time"
 
 	"github.com/go-gl/mathgl/mgl32"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
-	WORLD_WIDTH  float32 = 20_000
-	WORLD_HEIGHT float32 = 20_000
-	WORLD_DEPTH  float32 = 20_000
+	WORLD_WIDTH  float32 = 50_000
+	WORLD_HEIGHT float32 = 50_000
+	WORLD_DEPTH  float32 = 50_000
 
-	STAR_CAP    int = 20000
-	STAR_ACTIVE int = 10000
+	STAR_CAP    int = 2_000_000
+	STAR_ACTIVE int = STAR_CAP / 2
 
 	PLAYERS_MAX int = 100
 )
 
 var playerIdCount int32 = 1
 
-type InputEvent struct {
-	playerId int32
-	input    int32
+type PlayerEventType int32
+
+const (
+	STAR_TOUCH PlayerEventType = iota
+)
+
+type PlayerEvent interface {
+	Type() PlayerEventType
+}
+
+type StarTouch struct {
+	starId int32
+}
+
+func (*StarTouch) Type() PlayerEventType {
+	return STAR_TOUCH
 }
 
 type State struct {
 	stars   []*Star
 	players map[*Player]bool
 
-	events     chan InputEvent
+	events     chan PlayerEvent
 	join       chan *Player
 	disconnect chan *Player
-	input      chan []byte
+
+	tickCache *protos.Tick
 }
 
 func randomVec3() mgl32.Vec3 {
@@ -72,8 +85,20 @@ func CreateState() *State {
 
 		join:       make(chan *Player),
 		disconnect: make(chan *Player),
-		events:     make(chan InputEvent, 1024),
-		input:      make(chan []byte),
+		events:     make(chan PlayerEvent, 1024),
+
+		tickCache: &protos.Tick{
+			Payload: &protos.Tick_GameTick{
+				GameTick: &protos.GameTick{
+					Players: &protos.Players{
+						Players: nil,
+					},
+					StarsUpdate: &protos.Stars{
+						Stars: nil,
+					},
+				},
+			},
+		},
 	}
 
 	return s
@@ -95,7 +120,7 @@ func (s *State) ListenPlayers() {
 					},
 				}
 
-				data, err := proto.Marshal(tick)
+				data, err := tick.MarshalVT()
 
 				if err != nil {
 					log.Printf("failed to create package to tell who the player is %s", err.Error())
@@ -109,11 +134,13 @@ func (s *State) ListenPlayers() {
 					stars = append(stars, s.toProto())
 				}
 
-				data, err = proto.Marshal(&protos.Tick{
+				tick = &protos.Tick{
 					Payload: &protos.Tick_StarsInit{
 						StarsInit: &protos.Stars{Stars: stars},
 					},
-				})
+				}
+
+				data, err = tick.MarshalVT()
 
 				if err != nil {
 					log.Printf("Failed to generate star initialization %s", err.Error())
@@ -128,15 +155,15 @@ func (s *State) ListenPlayers() {
 				s.removePlayer(player)
 				log.Printf("Player disconnected %d", player.i)
 			}
-		case data := <-s.input:
+		case playerEvent := <-s.events:
 			{
-				input := protos.Input{}
-				proto.Unmarshal(data, &input)
-
-				select {
-				case s.events <- InputEvent{playerId: input.TargetId, input: input.Input}:
-				default:
-					log.Println("Dropping input event; queue was full")
+				switch e := playerEvent.(type) {
+				case *StarTouch:
+					{
+						s := s.stars[e.starId]
+						s.active = false
+						s.sendUpdate = true
+					}
 				}
 			}
 		}
@@ -152,10 +179,9 @@ func (s *State) Tick() {
 
 	for range ticker.C {
 		for _, s := range s.stars {
-			if !s.active {
-				continue
+			if s.sendUpdate {
+				stars = append(stars, s.toProto())
 			}
-			stars = append(stars, s.toProto())
 		}
 
 		for p := range s.players {
@@ -163,25 +189,17 @@ func (s *State) Tick() {
 			players = append(players, p.toProto())
 		}
 
-		tick, err := proto.Marshal(&protos.Tick{
-			Payload: &protos.Tick_GameTick{
-				GameTick: &protos.GameTick{
-					Players: &protos.Players{
-						Players: players,
-					},
-					StarsUpdate: &protos.Stars{
-						Stars: stars,
-					},
-				},
-			},
-		})
+		s.tickCache.GetGameTick().GetPlayers().Players = players
+		s.tickCache.GetGameTick().GetStarsUpdate().Stars = stars
+
+		data, err := s.tickCache.MarshalVT()
 
 		if err != nil {
 			log.Fatalf("Failed to marshal game state %s", err.Error())
 		}
 
 		for p := range s.players {
-			p.send <- tick
+			p.send <- data
 		}
 
 		stars = stars[:0]

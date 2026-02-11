@@ -6,34 +6,31 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-func toProtoVec3(v mgl32.Vec3) *protos.Vector3 {
-	return &protos.Vector3{
-		X: v.X(),
-		Y: v.Y(),
-		Z: v.Z(),
-	}
-}
-func toProtoVec4(v mgl32.Quat) *protos.Vector4 {
-	return &protos.Vector4{
-		X: v.X(),
-		Y: v.Y(),
-		Z: v.Z(),
-		W: v.W,
-	}
-}
-
 func (gObj *GameObject) toProto() *protos.GameObjectDefinition {
-	return &protos.GameObjectDefinition{
-		Id:       gObj.i,
-		Position: toProtoVec3(gObj.p),
-		Rotation: toProtoVec4(gObj.r),
+	if gObj.protoCache == nil {
+		gObj.protoCache = &protos.GameObjectDefinition{
+			Position: &protos.Vector3{},
+			Rotation: &protos.Vector4{},
+		}
+		gObj.protoCache.Id = gObj.i
 	}
+
+	gObj.protoCache.Position.X = gObj.p.X()
+	gObj.protoCache.Position.Y = gObj.p.Y()
+	gObj.protoCache.Position.Z = gObj.p.Z()
+
+	gObj.protoCache.Rotation.X = gObj.r.X()
+	gObj.protoCache.Rotation.Y = gObj.r.Y()
+	gObj.protoCache.Rotation.Z = gObj.r.Z()
+	gObj.protoCache.Rotation.W = gObj.r.W
+	return gObj.protoCache
 }
 
 type GameObject struct {
-	i int32
-	p mgl32.Vec3 // position of the object in 3d space
-	r mgl32.Quat
+	i          int32
+	p          mgl32.Vec3 // position of the object in 3d space
+	r          mgl32.Quat
+	protoCache *protos.GameObjectDefinition
 }
 
 type Positionable interface {

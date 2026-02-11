@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"space-snake-3d/game"
 
 	"github.com/gorilla/websocket"

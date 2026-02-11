@@ -9,4 +9,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-require github.com/gorilla/websocket v1.5.3
+require (
+	github.com/gorilla/websocket v1.5.3
+	github.com/planetscale/vtprotobuf v0.6.0
+)
