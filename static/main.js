@@ -1,6 +1,8 @@
 import * as THREE from "three"
 import { Input, Tick } from "./proto/protocol.js"
 import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./constants.js";
+import { getStarshipBall, newStarship } from "./starshipFactory.js";
+import { createFlashSprite } from "./flashOfLight.js";
 /**
  * @typedef {Object} Vector3
  * @property {number} x
@@ -21,6 +23,7 @@ import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./c
  * @property {number} id
  * @property {Vector3} position
  * @property {Vector4} rotation 
+ * 
 */
 
 /**
@@ -28,6 +31,8 @@ import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./c
  * @property {State} state
  * @property {number} pitch
  * @property {number} yaw
+ * @property {number} score
+ * @property {number} shootLoad
  */
 
 /**
@@ -37,53 +42,53 @@ import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./c
  */
 
 /**
- * @type {Star[][][]}
+ * @typedef {Object} FlashOfLight
+ * @property {State} state
+ * @property {number} intensity
  */
 
+/**
+ * @type {Star[][][]}
+ */
 const PLANE_VIEW_BOXES = Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => { return Array.from({ length: PLANE_VIEW_BOX_COUNT }, () => []) })
 const STAR_ACTIVE = 1.0
 const STAR_INACTIVE = 0.0
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 1000, 5000);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
 const renderer = new THREE.WebGLRenderer();
-
-renderer.setSize(window.innerWidth, window.innerHeight);
-
 const activeArray = new Float32Array(2_000_000).fill(STAR_ACTIVE);
 const starGeometry = new THREE.TetrahedronGeometry(10);
-starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeArray, 1));
 const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
+
+/**
+ * @type {Star[] | null}
+*/
+let stars = null
+
+/**
+ * @type {Map<number, THREE.Group>}
+ */
+const playersMap = new Map()
+
 /**
  * @type {Map<number, THREE.Mesh>}
  */
-const playersMap = new Map()
+
+const flashMap = new Map()
+
 /**
- * @param {Player} player 
+ * @param {FlashOfLight} flash
+ * @returns {THREE.Mesh}
  */
-const newPlayer = (player) => {
-    const { position, id, rotation } = player.state
-    const geometry = new THREE.BoxGeometry(20, 20, 20);
 
-    const material = new THREE.MeshBasicMaterial({
-        color: 0xffff00,
-        wireframe: true
-    });
 
-    const mesh = new THREE.Mesh(geometry, material);
-
-    mesh.position.set(position.x, position.y, position.z);
-
-    const { x, y, z, w } = rotation;
-    mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
-
-    scene.add(mesh);
-    playersMap.set(id, mesh);
-    return mesh;
-}
-
+scene.fog = new THREE.Fog(0x000000, 1000, 5000);
+renderer.setSize(window.innerWidth, window.innerHeight);
+starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeArray, 1));
+scene.add(starMesh)
+document.body.appendChild(renderer.domElement);
 starMesh.frustumCulled = false;
 starMaterial.onBeforeCompile = (shader) => {
     shader.uniforms.uPlayerPos = { value: new THREE.Vector3() };
@@ -114,13 +119,39 @@ starMaterial.onBeforeCompile = (shader) => {
     );
 };
 
-const dummyObj = new THREE.Object3D();
-scene.add(starMesh)
-document.body.appendChild(renderer.domElement);
-
 console.time("Pre-compile");
 renderer.compile(scene, camera);
 console.timeEnd("Pre-compile");
+
+
+/**
+ * @param {Player} player 
+ */
+const newPlayer = (player) => {
+    const { position, id, rotation } = player.state
+    const starship = newStarship()
+    starship.position.set(position.x, position.y, position.z);
+
+    const { x, y, z, w } = rotation;
+    starship.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
+
+    scene.add(starship);
+    playersMap.set(id, starship);
+    return starship;
+}
+
+const newFlash = (flash) => {
+    const { state } = flash;
+    const { position, id } = state;
+    const flashSprite = createFlashSprite(position)
+
+    scene.add(flashSprite);
+    flashMap.set(id, flashSprite);
+
+    return flashSprite;
+}
+
+
 
 const ws = new WebSocket("/ws")
 
@@ -130,7 +161,8 @@ const keys = {
     ArrowLeft: 1 << 2,
     ArrowRight: 1 << 3,
     z: 1 << 4,
-    x: 1 << 5
+    x: 1 << 5,
+    [" "]: 1 << 6
 }
 
 let input = 0
@@ -138,10 +170,6 @@ let input = 0
  * @type {number | null}
 */
 let targetId = null
-/**
- * @type {Star[] | null}
-*/
-let stars = null
 
 /**
  * @param {KeyboardEvent} event 
@@ -191,6 +219,8 @@ const hudZ = document.getElementById("pos-z")
 const hudPitch = document.getElementById("pitch")
 const hudYaw = document.getElementById("yaw")
 
+const hudScore = document.getElementById("score-ui")
+
 /**
  * @param {MessageEvent} event
  */
@@ -215,6 +245,7 @@ ws.addEventListener("message", async ({ data }) => {
             case "starsInit":
                 stars = message.starsInit.stars
                 console.time("init")
+                const dummyObj = new THREE.Object3D();
                 for (const star of stars) {
                     const { id, position } = star.state
                     dummyObj.position.set(position.x, position.y, position.z);
@@ -234,16 +265,42 @@ ws.addEventListener("message", async ({ data }) => {
                 if (stars === null) {
                     return
                 }
-
-                console.time("Game tick")
+                // console.time("Game tick")
                 /**
-                 *  @type {{ players: { players: Player[] }, starsUpdate: { stars: Star[] } }} 
+                 *  @type {{ players: { players: Player[] }, starsUpdate: { stars: Star[] }, flashes: { flashes: FlashOfLight[] } }} 
                 **/
-                const { players, starsUpdate } = message.gameTick;
-                let me = null
+                const { players, starsUpdate, flashes } = message.gameTick;
 
-                const allIds = new Set(playersMap.keys())
+                const allFlashIds = new Set(flashMap.keys())
+                if (flashes.flashes.length > 0) {
+                    for (const flashMessage of flashes.flashes) {
+                        const { id } = flashMessage.state
 
+
+                        let flash = flashMap.get(id) ?? null
+                        if (flash === null) {
+                            flash = newFlash(flashMessage)
+                        }
+
+                        allFlashIds.delete(id)
+                        const normalizedIntensity = Math.max(0, flashMessage.intensity / 100.0);
+
+                        flash.material.opacity = normalizedIntensity;
+
+                        const currentScale = 1 + (normalizedIntensity * 1000);
+                        flash.scale.set(currentScale, currentScale, 1);
+                    }
+
+                }
+                // clean up 
+                for (const id of allFlashIds) {
+                    const flash = flashMap.get(id) ?? null
+                    if (flash === null) {
+                        continue
+                    }
+                    scene.remove(flash)
+                    flashMap.delete(id)
+                }
                 if (starsUpdate.stars.length > 0) {
                     let minIndex = Infinity
                     let maxIndex = -Infinity
@@ -266,28 +323,41 @@ ws.addEventListener("message", async ({ data }) => {
                     activeGPUAttribute.needsUpdate = true
                 }
 
+                const allPlayerIds = new Set(playersMap.keys())
+                let me = null
                 // move players
                 for (const player of players.players) {
-                    const { id, position, rotation } = player.state
+                    const { id, position, rotation, } = player.state
                     if (id === targetId) {
                         me = player
                     }
 
-                    allIds.delete(id)
-                    let graphic = playersMap.get(id)
-                    if (graphic === undefined) {
-                        graphic = newPlayer(player)
+                    allPlayerIds.delete(id)
+                    let starship = playersMap.get(id)
+                    if (starship === undefined) {
+                        starship = newPlayer(player)
                     }
 
-                    graphic.position.x = position.x
-                    graphic.position.y = position.y
-                    graphic.position.z = position.z
+                    starship.position.x = position.x
+                    starship.position.y = position.y
+                    starship.position.z = position.z
 
                     const { x, y, z, w } = rotation
-                    graphic.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+                    starship.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+                    const ball = getStarshipBall(starship)
+                    const loadMultiplier = (player.shootLoad > 0 ? player.shootLoad : 1)
+                    ball.rotation.y += 0.02 * loadMultiplier
+                    ball.rotation.x += 0.004
+
+                    if (loadMultiplier > 1) {
+                        const scaleFactor = 1.001 * loadMultiplier
+                        ball.scale.set(scaleFactor, scaleFactor, scaleFactor)
+                    } else {
+                        ball.scale.set(1, 1, 1)
+                    }
                 }
 
-                for (const id of allIds) {
+                for (const id of allPlayerIds) {
                     scene.remove(playersMap.get(id))
                     playersMap.delete(id)
                 }
@@ -297,7 +367,7 @@ ws.addEventListener("message", async ({ data }) => {
                 }
 
                 // set camera
-                const { state, pitch, yaw } = me
+                const { state, pitch, yaw, score } = me
                 const { position, rotation } = state
 
                 const playerMesh = playersMap.get(targetId)
@@ -309,9 +379,14 @@ ws.addEventListener("message", async ({ data }) => {
                 hudPitch.innerText = Math.trunc(pitch * 1000) / 100
                 hudYaw.innerText = Math.trunc(yaw * 1000) / 100
 
+                hudScore.innerText = score
+
+                const pitchIntensity = pitch / 0.5;
+                const yawIntensity = yaw / 0.5;
+
                 const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
 
-                const cameraOffset = new THREE.Vector3(0, 20, 100);
+                const cameraOffset = new THREE.Vector3(500 * yawIntensity, (500 * (-pitchIntensity)) + 20, 100);
                 cameraOffset.applyQuaternion(playerRot);
 
                 const idealPosition = new THREE.Vector3(
@@ -330,8 +405,7 @@ ws.addEventListener("message", async ({ data }) => {
                 camera.lookAt(position.x, position.y, position.z);
 
                 const maxOffsetRadians = THREE.MathUtils.degToRad(180);
-                const pitchIntensity = pitch / 0.5;
-                const yawIntensity = yaw / 0.5;
+
 
                 const visualPitch = pitchIntensity * maxOffsetRadians;
                 const visualTurn = yawIntensity * maxOffsetRadians;
@@ -381,11 +455,10 @@ ws.addEventListener("message", async ({ data }) => {
                     }
                 }
                 renderer.render(scene, camera)
-                console.timeEnd("Game tick")
+                //console.timeEnd("Game tick")
                 break;
         }
     } catch (e) {
-        ws.close(100, e)
         console.error("tick failed:", e);
     }
 })

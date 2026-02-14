@@ -17,6 +17,8 @@ const (
 	MAX_ROT_SPEED           float32 = 0.1
 	MAX_SPEED               float32 = 200.0
 	ROT_FRICTION            float32 = 0.9
+
+	LOAD_MAX_INCREASE_AMOUNT int32 = 10
 )
 
 type Input int32
@@ -28,6 +30,7 @@ const (
 	FLAG_MOVE_RIGHT Input = 1 << 3
 	FLAG_SPEED_UP   Input = 1 << 4
 	FLAG_BRAKE      Input = 1 << 5
+	FLAG_SHOOT_LOAD Input = 1 << 6
 )
 
 type Player struct {
@@ -41,6 +44,10 @@ type Player struct {
 	pitch float32
 	yaw   float32
 	brake float32
+	score int32
+
+	shootLoad int32
+	loadMax   int32
 
 	// how many frames has input been down
 	heldMap map[Input]float32
@@ -50,10 +57,11 @@ type Player struct {
 
 func NewPlayer(conn *websocket.Conn, s *State) *Player {
 	p := &Player{
-		conn:  conn,
-		send:  make(chan []byte, 64),
-		input: 0,
-		speed: 1,
+		conn:    conn,
+		send:    make(chan []byte, 64),
+		input:   0,
+		speed:   1,
+		loadMax: 20,
 
 		heldMap: map[Input]float32{},
 	}
@@ -106,6 +114,8 @@ func (p *Player) ReadFrom() {
 		case *protos.Input_StarTouch:
 			{
 				p.state.events <- &StarTouch{starId: msg.StarTouch.TargetId}
+				p.score++
+				p.loadMax += LOAD_MAX_INCREASE_AMOUNT
 			}
 		}
 	}
@@ -198,6 +208,13 @@ func (p *Player) applyInput() {
 		p.speed *= p.brake
 	}
 
+	if p.input&FLAG_SHOOT_LOAD == FLAG_SHOOT_LOAD {
+		p.shootLoad = min(p.loadMax, p.shootLoad+1)
+	} else if p.shootLoad > 0 {
+		p.state.events <- &Shoot{playerId: p.i, power: p.shootLoad}
+		p.shootLoad = 0
+	}
+
 	pitchRot := mgl32.QuatRotate(p.pitch, mgl32.Vec3{1, 0, 0})
 	yawRot := mgl32.QuatRotate(p.yaw, mgl32.Vec3{0, 1, 0})
 
@@ -217,5 +234,7 @@ func (p *Player) toProto() *protos.Player {
 	p.protoCache.State = p.GameObject.toProto()
 	p.protoCache.Pitch = p.pitch
 	p.protoCache.Yaw = p.yaw
+	p.protoCache.Score = p.score
+	p.protoCache.ShootLoad = p.shootLoad
 	return p.protoCache
 }

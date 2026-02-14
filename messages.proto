@@ -44,6 +44,16 @@ message Player {
   GameObjectDefinition state = 1;
   float pitch = 2;
   float yaw = 3;
+  int32 score = 4;
+  int32 shoot_load = 5;
+}
+
+/**
+*
+*/
+message FlashOfLight {
+  GameObjectDefinition state = 1;
+  int32 intensity = 2;
 }
 
 /*
@@ -68,11 +78,19 @@ message Players {
 }
 
 /**
+*
+*/
+message Flashes {
+  repeated FlashOfLight flashes = 1;
+}
+
+/**
  *
  */
 message GameTick {
   Players players      = 1;
   Stars   stars_update = 2;
+  Flashes   flashes    = 3;
 }
 
 /**
