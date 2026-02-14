@@ -26,6 +26,8 @@ import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./c
 /**
  * @typedef {Object} Player
  * @property {State} state
+ * @property {number} pitch
+ * @property {number} yaw
  */
 
 /**
@@ -55,7 +57,7 @@ starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeAr
 const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
 /**
- * @type {Map<number, THREE.Box3Helper>}
+ * @type {Map<number, THREE.Mesh>}
  */
 const playersMap = new Map()
 /**
@@ -116,6 +118,10 @@ const dummyObj = new THREE.Object3D();
 scene.add(starMesh)
 document.body.appendChild(renderer.domElement);
 
+console.time("Pre-compile");
+renderer.compile(scene, camera);
+console.timeEnd("Pre-compile");
+
 const ws = new WebSocket("/ws")
 
 const keys = {
@@ -132,89 +138,10 @@ let input = 0
  * @type {number | null}
 */
 let targetId = null
-let currentPlaneViewBox = [0, 0]
 /**
  * @type {Star[] | null}
 */
 let stars = null
-
-const collisionCheck = () => {
-    const [x, y] = currentPlaneViewBox
-    // console.log({ stars: PLANE_VIEW_BOXES[x][y] })
-}
-
-/**
- * 
- * @param {{players: {players: Player[]}, starsUpdate: {starsUpdate: []}}} tick
- * @returns 
- */
-const animationLoop = ({ players, starsUpdate }) => {
-    /**
-     * @type {Player | null}
-     */
-    let me = null
-
-    const allIds = new Set(playersMap.keys())
-
-    for (const player of players.players) {
-        const { id, position, rotation } = player.state
-        if (id === targetId) {
-            me = player
-        }
-
-        allIds.delete(id)
-        let graphic = playersMap.get(id)
-        if (graphic === undefined) {
-            graphic = newPlayer(player)
-        }
-
-        graphic.position.x = position.x
-        graphic.position.y = position.y
-        graphic.position.z = position.z
-
-        const { x, y, z, w } = rotation
-        graphic.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
-    }
-
-    for (const id of allIds) {
-        scene.remove(players.get(id))
-        delete players[id]
-    }
-
-    if (me === null) {
-        return
-    }
-
-    const { state } = me
-    const { position, rotation } = state
-    const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
-
-    const cameraOffset = new THREE.Vector3(0, 20, 100);
-    cameraOffset.applyQuaternion(playerRot);
-
-    camera.position.x = position.x + cameraOffset.x;
-    camera.position.y = position.y + cameraOffset.y;
-    camera.position.z = position.z + cameraOffset.z;
-
-    const playerUp = new THREE.Vector3(0, 1, 0);
-    playerUp.applyQuaternion(playerRot);
-
-    camera.up.copy(playerUp);
-    camera.lookAt(position.x, position.y, position.z);
-
-    currentPlaneViewBox = [
-        Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE),
-        Math.floor((position.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
-    ];
-
-    if (starMaterial.userData.shader) {
-        starMaterial.userData.shader.uniforms.uPlayerPos.value.copy(position);
-    }
-
-    collisionCheck()
-    renderer.render(scene, camera)
-}
-
 
 /**
  * @param {KeyboardEvent} event 
@@ -257,6 +184,13 @@ ws.addEventListener("open", (event) => {
     console.log("Connection established...", { event })
 })
 
+const hudX = document.getElementById("pos-x")
+const hudY = document.getElementById("pos-y")
+const hudZ = document.getElementById("pos-z")
+
+const hudPitch = document.getElementById("pitch")
+const hudYaw = document.getElementById("yaw")
+
 /**
  * @param {MessageEvent} event
  */
@@ -280,7 +214,7 @@ ws.addEventListener("message", async ({ data }) => {
                 break;
             case "starsInit":
                 stars = message.starsInit.stars
-                console.log({ stars })
+                console.time("init")
                 for (const star of stars) {
                     const { id, position } = star.state
                     dummyObj.position.set(position.x, position.y, position.z);
@@ -293,15 +227,165 @@ ws.addEventListener("message", async ({ data }) => {
                     PLANE_VIEW_BOXES[planeViewBoxX][planeViewBoxY].push(star)
                 }
                 starMesh.instanceMatrix.needsUpdate = true
+                console.timeEnd("init")
                 break;
             case "gameTick":
+                // still loading our star mesh
                 if (stars === null) {
                     return
                 }
-                animationLoop(message.gameTick)
+
+                console.time("Game tick")
+                /**
+                 *  @type {{ players: { players: Player[] }, starsUpdate: { stars: Star[] } }} 
+                **/
+                const { players, starsUpdate } = message.gameTick;
+                let me = null
+
+                const allIds = new Set(playersMap.keys())
+
+                if (starsUpdate.stars.length > 0) {
+                    let minIndex = Infinity
+                    let maxIndex = -Infinity
+                    // worst case we have updates at id 1 and 2mil :D Let's hope that doesn't happen...
+                    for (const { active, state } of starsUpdate.stars) {
+                        stars[state.id].active = active
+                        activeArray[state.id] = active ? STAR_ACTIVE : STAR_INACTIVE
+
+                        if (state.id < minIndex) {
+                            minIndex = state.id
+                        }
+                        if (state.id > maxIndex) {
+                            maxIndex = state.id
+                        }
+                    }
+
+                    const activeGPUAttribute = starGeometry.attributes.aActive;
+                    activeGPUAttribute.updateRanges.offset = minIndex;
+                    activeGPUAttribute.updateRanges.count = (maxIndex - minIndex) + 1;
+                    activeGPUAttribute.needsUpdate = true
+                }
+
+                // move players
+                for (const player of players.players) {
+                    const { id, position, rotation } = player.state
+                    if (id === targetId) {
+                        me = player
+                    }
+
+                    allIds.delete(id)
+                    let graphic = playersMap.get(id)
+                    if (graphic === undefined) {
+                        graphic = newPlayer(player)
+                    }
+
+                    graphic.position.x = position.x
+                    graphic.position.y = position.y
+                    graphic.position.z = position.z
+
+                    const { x, y, z, w } = rotation
+                    graphic.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+                }
+
+                for (const id of allIds) {
+                    scene.remove(playersMap.get(id))
+                    playersMap.delete(id)
+                }
+
+                if (me === null) {
+                    break;
+                }
+
+                // set camera
+                const { state, pitch, yaw } = me
+                const { position, rotation } = state
+
+                const playerMesh = playersMap.get(targetId)
+
+                hudX.innerText = Math.trunc(position.x)
+                hudY.innerText = Math.trunc(position.y)
+                hudZ.innerText = Math.trunc(position.z)
+
+                hudPitch.innerText = Math.trunc(pitch * 1000) / 100
+                hudYaw.innerText = Math.trunc(yaw * 1000) / 100
+
+                const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+
+                const cameraOffset = new THREE.Vector3(0, 20, 100);
+                cameraOffset.applyQuaternion(playerRot);
+
+                const idealPosition = new THREE.Vector3(
+                    position.x + cameraOffset.x,
+                    position.y + cameraOffset.y,
+                    position.z + cameraOffset.z
+                );
+
+                const cameraSpeed = 0.5;
+                camera.position.lerp(idealPosition, cameraSpeed);
+
+                const playerUp = new THREE.Vector3(0, 1, 0);
+                playerUp.applyQuaternion(playerRot);
+
+                camera.up.lerp(playerUp, cameraSpeed);
+                camera.lookAt(position.x, position.y, position.z);
+
+                const maxOffsetRadians = THREE.MathUtils.degToRad(180);
+                const pitchIntensity = pitch / 0.5;
+                const yawIntensity = yaw / 0.5;
+
+                const visualPitch = pitchIntensity * maxOffsetRadians;
+                const visualTurn = yawIntensity * maxOffsetRadians;
+
+                playerMesh.quaternion.copy(playerRot);
+
+                playerMesh.rotateX(visualPitch);
+                playerMesh.rotateY(visualTurn);
+                playerMesh.rotateZ(visualTurn);
+
+                const [planeX, planeY] = [
+                    Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE),
+                    Math.floor((position.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
+                ];
+
+                if (starMaterial.userData.shader) {
+                    starMaterial.userData.shader.uniforms.uPlayerPos.value.copy(position);
+                }
+
+                const dummyBox_1 = new THREE.Box3();
+                const dummyBox_2 = new THREE.Box3();
+
+                const starCenterVec = new THREE.Vector3();
+                const starSizeVec = new THREE.Vector3(10, 10, 10);
+                const meCenterVec = new THREE.Vector3(me.state.position.x, me.state.position.y, me.state.position.z);
+                const meSizeVec = new THREE.Vector3(20, 20, 20);
+
+                dummyBox_2.setFromCenterAndSize(meCenterVec, meSizeVec);
+                for (const star of PLANE_VIEW_BOXES[planeX][planeY]) {
+                    if (!star.active) {
+                        continue
+                    }
+
+                    const { x, y, z } = star.state.position
+                    starCenterVec.set(x, y, z)
+                    dummyBox_1.setFromCenterAndSize(starCenterVec, starSizeVec)
+
+                    if (dummyBox_1.intersectsBox(dummyBox_2)) {
+                        const msg = {
+                            starTouch: {
+                                targetId: star.state.id
+                            }
+                        }
+                        const i = Input.create(msg)
+                        ws.send(Input.encode(i).finish())
+                        break; // There are no overlapping stars so no need to continue the checks
+                    }
+                }
+                renderer.render(scene, camera)
+                console.timeEnd("Game tick")
                 break;
         }
     } catch (e) {
+        ws.close(100, e)
         console.error("tick failed:", e);
     }
 })

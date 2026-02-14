@@ -42,6 +42,8 @@ message Star {
  */
 message Player {
   GameObjectDefinition state = 1;
+  float pitch = 2;
+  float yaw = 3;
 }
 
 /*

@@ -181,6 +181,7 @@ func (s *State) Tick() {
 		for _, s := range s.stars {
 			if s.sendUpdate {
 				stars = append(stars, s.toProto())
+				s.sendUpdate = false
 			}
 		}
 

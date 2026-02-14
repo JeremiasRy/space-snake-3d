@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	BASE_ROT_SPEED          float32 = 0.00001
+	BASE_ROT_SPEED          float32 = 0.0001
 	BASE_ACCELERATION_SPEED float32 = 0.005
 	JERK_FACTOR             float32 = 0.01
 	ROT_JERK_FACTOR         float32 = 0.0001
-	MAX_ROT_SPEED           float32 = 0.05
-	MAX_SPEED               float32 = 100.0
+	MAX_ROT_SPEED           float32 = 0.1
+	MAX_SPEED               float32 = 200.0
 	ROT_FRICTION            float32 = 0.9
 )
 
@@ -105,7 +105,7 @@ func (p *Player) ReadFrom() {
 			}
 		case *protos.Input_StarTouch:
 			{
-
+				p.state.events <- &StarTouch{starId: msg.StarTouch.TargetId}
 			}
 		}
 	}
@@ -215,5 +215,7 @@ func (p *Player) toProto() *protos.Player {
 	}
 
 	p.protoCache.State = p.GameObject.toProto()
+	p.protoCache.Pitch = p.pitch
+	p.protoCache.Yaw = p.yaw
 	return p.protoCache
 }
