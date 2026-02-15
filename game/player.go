@@ -1,6 +1,7 @@
 package game
 
 import (
+	"container/list"
 	"log"
 	"space-snake-3d/protos"
 
@@ -19,6 +20,7 @@ const (
 	ROT_FRICTION            float32 = 0.9
 
 	LOAD_MAX_INCREASE_AMOUNT int32 = 10
+	SCORE_LENGTH_FACTOR      int   = 10
 )
 
 type Input int32
@@ -34,20 +36,20 @@ const (
 )
 
 type Player struct {
-	GameObject
+	PositionAndRotation
 	conn  *websocket.Conn
 	send  chan []byte
 	state *State
 	input Input
 
-	speed float32
-	pitch float32
-	yaw   float32
-	brake float32
-	score int32
-
-	shootLoad int32
-	loadMax   int32
+	id        int32
+	speed     float32
+	pitch     float32
+	yaw       float32
+	brake     float32
+	score     int32
+	positions list.List
+	maxLength int
 
 	// how many frames has input been down
 	heldMap map[Input]float32
@@ -57,11 +59,13 @@ type Player struct {
 
 func NewPlayer(conn *websocket.Conn, s *State) *Player {
 	p := &Player{
-		conn:    conn,
-		send:    make(chan []byte, 64),
-		input:   0,
-		speed:   1,
-		loadMax: 20,
+		conn:      conn,
+		send:      make(chan []byte, 64),
+		input:     0,
+		speed:     10,
+		positions: list.List{},
+		maxLength: SCORE_LENGTH_FACTOR,
+		score:     1,
 
 		heldMap: map[Input]float32{},
 	}
@@ -94,7 +98,7 @@ func (p *Player) ReadFrom() {
 	for {
 		_, data, err := p.conn.ReadMessage()
 		if err != nil {
-			log.Printf("error while reading player: %d, %s", p.i, err.Error())
+			log.Printf("error while reading player: %d, %s", p.id, err.Error())
 			return
 		}
 
@@ -115,7 +119,7 @@ func (p *Player) ReadFrom() {
 			{
 				p.state.events <- &StarTouch{starId: msg.StarTouch.TargetId}
 				p.score++
-				p.loadMax += LOAD_MAX_INCREASE_AMOUNT
+				p.maxLength += SCORE_LENGTH_FACTOR
 			}
 		}
 	}
@@ -208,33 +212,43 @@ func (p *Player) applyInput() {
 		p.speed *= p.brake
 	}
 
-	if p.input&FLAG_SHOOT_LOAD == FLAG_SHOOT_LOAD {
-		p.shootLoad = min(p.loadMax, p.shootLoad+1)
-	} else if p.shootLoad > 0 {
-		p.state.events <- &Shoot{playerId: p.i, power: p.shootLoad}
-		p.shootLoad = 0
-	}
-
 	pitchRot := mgl32.QuatRotate(p.pitch, mgl32.Vec3{1, 0, 0})
 	yawRot := mgl32.QuatRotate(p.yaw, mgl32.Vec3{0, 1, 0})
 
 	delta := yawRot.Mul(pitchRot)
 
-	p.r = p.r.Mul(delta).Normalize()
+	new := &protos.PosAndRot{}
+	p.PositionAndRotation.r = p.PositionAndRotation.r.Mul(delta).Normalize()
 
-	forward := p.r.Rotate(mgl32.Vec3{0, 0, -1})
-	p.p = p.p.Add(forward.Mul(p.speed))
+	forward := p.PositionAndRotation.r.Rotate(mgl32.Vec3{0, 0, -1})
+	p.PositionAndRotation.p = p.PositionAndRotation.p.Add(forward.Mul(p.speed))
+
+	new.Position = toProtoVec3(p.PositionAndRotation.p)
+	new.Rotation = toProtoVec4(p.PositionAndRotation.r)
+
+	p.positions.PushFront(new)
+
+	if p.positions.Len() > p.maxLength {
+		p.positions.Remove(p.positions.Back())
+	}
 }
 
 func (p *Player) toProto() *protos.Player {
 	if p.protoCache == nil {
-		p.protoCache = &protos.Player{}
+		p.protoCache = &protos.Player{
+			Positions: make([]*protos.PosAndRot, 0, 1000),
+		}
 	}
 
-	p.protoCache.State = p.GameObject.toProto()
+	p.protoCache.Positions = p.protoCache.Positions[:0]
 	p.protoCache.Pitch = p.pitch
 	p.protoCache.Yaw = p.yaw
 	p.protoCache.Score = p.score
-	p.protoCache.ShootLoad = p.shootLoad
+	p.protoCache.Id = p.id
+
+	for e := p.positions.Front(); e != nil; e = e.Next() {
+		p.protoCache.Positions = append(p.protoCache.Positions, e.Value.(*protos.PosAndRot))
+	}
+
 	return p.protoCache
 }

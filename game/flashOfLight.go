@@ -15,7 +15,8 @@ const (
 var flashIdCount int32 = 0
 
 type FlashOfLight struct {
-	GameObject
+	PositionAndRotation
+	id         int32
 	intensity  int32
 	isDecaying bool
 
@@ -30,7 +31,7 @@ func NewFlashOfLight(position mgl32.Vec3) *FlashOfLight {
 
 	f.p = position
 	f.r = mgl32.Quat{}
-	f.i = flashIdCount
+	f.id = flashIdCount
 	flashIdCount++
 	return f
 }
@@ -56,7 +57,8 @@ func (f *FlashOfLight) toProto() *protos.FlashOfLight {
 		f.protoCache = &protos.FlashOfLight{}
 	}
 
-	f.protoCache.State = f.GameObject.toProto()
+	f.protoCache.Position = f.PositionAndRotation.toProto()
 	f.protoCache.Intensity = f.intensity
+	f.protoCache.Id = f.id
 	return f.protoCache
 }

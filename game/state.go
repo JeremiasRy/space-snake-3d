@@ -128,8 +128,8 @@ func (st *State) ListenPlayers() {
 		case player := <-st.join:
 			{
 				st.addPlayer(player)
-				log.Printf("Player joined %d", player.i)
-				whoAmI := &protos.WhoAreYou{TargetId: player.i}
+				log.Printf("Player joined %d", player.id)
+				whoAmI := &protos.WhoAreYou{TargetId: player.id}
 
 				tick := &protos.Tick{
 					Payload: &protos.Tick_YouInit{
@@ -170,7 +170,7 @@ func (st *State) ListenPlayers() {
 		case player := <-st.disconnect:
 			{
 				st.removePlayer(player)
-				log.Printf("Player disconnected %d", player.i)
+				log.Printf("Player disconnected %d", player.id)
 			}
 		case playerEvent := <-st.events:
 			{
@@ -184,10 +184,6 @@ func (st *State) ListenPlayers() {
 						flash := NewFlashOfLight(s.p)
 						st.flashes[flash] = struct{}{}
 						st.flashMutex.Unlock()
-					}
-				case *Shoot:
-					{
-						log.Printf("SHOOT: %v", e)
 					}
 				}
 			}
@@ -248,7 +244,7 @@ func (st *State) Tick() {
 }
 
 func (st *State) addPlayer(p *Player) {
-	p.i = int32(playerIdCount)
+	p.id = int32(playerIdCount)
 	playerIdCount++
 
 	RandomizePositionAndDirection(p)

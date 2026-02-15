@@ -3,7 +3,8 @@ package game
 import "space-snake-3d/protos"
 
 type Star struct {
-	GameObject
+	PositionAndRotation
+	id         int32
 	active     bool
 	sendUpdate bool
 	protoCache *protos.Star
@@ -20,7 +21,7 @@ func NewStar(opts NewStarOpts) *Star {
 		active:     active,
 		sendUpdate: false,
 	}
-	s.i = id
+	s.id = id
 	return s
 }
 
@@ -30,6 +31,7 @@ func (s *Star) toProto() *protos.Star {
 	}
 
 	s.protoCache.Active = s.active
-	s.protoCache.State = s.GameObject.toProto()
+	s.protoCache.Position = s.PositionAndRotation.toProto()
+	s.protoCache.Id = s.id
 	return s.protoCache
 }

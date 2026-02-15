@@ -1,7 +1,6 @@
 import * as THREE from "three"
 import { Input, Tick } from "./proto/protocol.js"
 import { PLANE_VIEW_BOX_SIZE, PLANE_VIEW_BOX_COUNT, WORLD_BOX_OFFSET } from "./constants.js";
-import { getStarshipBall, newStarship } from "./starshipFactory.js";
 import { createFlashSprite } from "./flashOfLight.js";
 /**
  * @typedef {Object} Vector3
@@ -19,31 +18,32 @@ import { createFlashSprite } from "./flashOfLight.js";
  */
 
 /**
- * @typedef {Object} State
- * @property {number} id
- * @property {Vector3} position
+ * @typedef {Object} PosAndRot
+ * @property {Vector3} position 
  * @property {Vector4} rotation 
- * 
-*/
+ */
+
 
 /**
  * @typedef {Object} Player
- * @property {State} state
+ * @property {PosAndRot[]} positions
  * @property {number} pitch
  * @property {number} yaw
  * @property {number} score
- * @property {number} shootLoad
+ * @property {number} id
  */
 
 /**
  * @typedef {Object} Star
- * @property {State} state
+ * @property {number} id
+ * @property {PosAndRot} position
  * @property {boolean} active
- */
+*/
 
 /**
  * @typedef {Object} FlashOfLight
- * @property {State} state
+ * @property {number} id
+ * @property {PosAndRot} position
  * @property {number} intensity
  */
 
@@ -68,23 +68,15 @@ const starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 2_000_000);
 let stars = null
 
 /**
- * @type {Map<number, THREE.Group>}
+ * @type {Map<number, THREE.Mesh[]>}
  */
 const playersMap = new Map()
-
 /**
  * @type {Map<number, THREE.Mesh>}
  */
-
 const flashMap = new Map()
 
-/**
- * @param {FlashOfLight} flash
- * @returns {THREE.Mesh}
- */
-
-
-scene.fog = new THREE.Fog(0x000000, 1000, 5000);
+scene.fog = new THREE.Fog(0x000000, 1000, 25000);
 renderer.setSize(window.innerWidth, window.innerHeight);
 starGeometry.setAttribute('aActive', new THREE.InstancedBufferAttribute(activeArray, 1));
 scene.add(starMesh)
@@ -124,34 +116,46 @@ renderer.compile(scene, camera);
 console.timeEnd("Pre-compile");
 
 
+const playerMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, wireframe: true });
+/**
+ * 
+ * @param {PosAndRot} param0 
+ */
+const newRingMesh = ({ position, rotation }) => {
+    const geometry = new THREE.RingGeometry(8, 16, 8, 8);
+    const mesh = new THREE.Mesh(geometry, playerMaterial);
+    mesh.position.set(position.x, position.y, position.z);
+
+    const { x, y, z, w } = rotation;
+    mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
+    return mesh
+}
 /**
  * @param {Player} player 
  */
 const newPlayer = (player) => {
-    const { position, id, rotation } = player.state
-    const starship = newStarship()
-    starship.position.set(position.x, position.y, position.z);
+    const { positions, id } = player
+    const meshArr = positions.map(newRingMesh)
 
-    const { x, y, z, w } = rotation;
-    starship.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
-
-    scene.add(starship);
-    playersMap.set(id, starship);
-    return starship;
+    meshArr.forEach(m => scene.add(m))
+    playersMap.set(id, meshArr);
+    return meshArr;
 }
-
+/**
+ * 
+ * @param {FlashOfLight} flash 
+ * @returns 
+ */
 const newFlash = (flash) => {
-    const { state } = flash;
-    const { position, id } = state;
-    const flashSprite = createFlashSprite(position)
+    const { id, position } = flash;
+    const { position: p, } = position;
+    const flashSprite = createFlashSprite(p)
 
     scene.add(flashSprite);
     flashMap.set(id, flashSprite);
 
     return flashSprite;
 }
-
-
 
 const ws = new WebSocket("/ws")
 
@@ -237,20 +241,21 @@ ws.addEventListener("message", async ({ data }) => {
 
         switch (message.payload) {
             case "youInit":
-                console.log("you_init", { targetId: message.youInit.targetId })
                 targetId = message.youInit.targetId
+                console.log("initialization tick received", { targetId })
                 window.addEventListener("keydown", handleDown)
                 window.addEventListener("keyup", handleUp)
                 break;
             case "starsInit":
                 stars = message.starsInit.stars
-                console.time("init")
+                console.time("star initialization")
                 const dummyObj = new THREE.Object3D();
                 for (const star of stars) {
-                    const { id, position } = star.state
-                    dummyObj.position.set(position.x, position.y, position.z);
-                    const planeViewBoxX = Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
-                    const planeViewBoxY = Math.floor((position.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
+                    const { id, position } = star
+                    const { position: p, } = position
+                    dummyObj.position.set(p.x, p.y, p.z);
+                    const planeViewBoxX = Math.floor((p.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
+                    const planeViewBoxY = Math.floor((p.y + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE)
 
                     dummyObj.updateMatrix();
                     starMesh.setMatrixAt(id, dummyObj.matrix);
@@ -258,14 +263,14 @@ ws.addEventListener("message", async ({ data }) => {
                     PLANE_VIEW_BOXES[planeViewBoxX][planeViewBoxY].push(star)
                 }
                 starMesh.instanceMatrix.needsUpdate = true
-                console.timeEnd("init")
+                console.timeEnd("star initialization")
                 break;
             case "gameTick":
                 // still loading our star mesh
                 if (stars === null) {
                     return
                 }
-                // console.time("Game tick")
+                console.time("Game tick")
                 /**
                  *  @type {{ players: { players: Player[] }, starsUpdate: { stars: Star[] }, flashes: { flashes: FlashOfLight[] } }} 
                 **/
@@ -274,7 +279,7 @@ ws.addEventListener("message", async ({ data }) => {
                 const allFlashIds = new Set(flashMap.keys())
                 if (flashes.flashes.length > 0) {
                     for (const flashMessage of flashes.flashes) {
-                        const { id } = flashMessage.state
+                        const { id } = flashMessage
 
 
                         let flash = flashMap.get(id) ?? null
@@ -305,15 +310,15 @@ ws.addEventListener("message", async ({ data }) => {
                     let minIndex = Infinity
                     let maxIndex = -Infinity
                     // worst case we have updates at id 1 and 2mil :D Let's hope that doesn't happen...
-                    for (const { active, state } of starsUpdate.stars) {
-                        stars[state.id].active = active
-                        activeArray[state.id] = active ? STAR_ACTIVE : STAR_INACTIVE
+                    for (const { active, id } of starsUpdate.stars) {
+                        stars[id].active = active
+                        activeArray[id] = active ? STAR_ACTIVE : STAR_INACTIVE
 
-                        if (state.id < minIndex) {
-                            minIndex = state.id
+                        if (id < minIndex) {
+                            minIndex = id
                         }
-                        if (state.id > maxIndex) {
-                            maxIndex = state.id
+                        if (id > maxIndex) {
+                            maxIndex = id
                         }
                     }
 
@@ -327,33 +332,39 @@ ws.addEventListener("message", async ({ data }) => {
                 let me = null
                 // move players
                 for (const player of players.players) {
-                    const { id, position, rotation, } = player.state
+                    const { id, positions } = player
+
                     if (id === targetId) {
                         me = player
                     }
 
                     allPlayerIds.delete(id)
-                    let starship = playersMap.get(id)
-                    if (starship === undefined) {
-                        starship = newPlayer(player)
+                    let snake = playersMap.get(id)
+                    if (snake === undefined) {
+                        snake = newPlayer(player)
                     }
 
-                    starship.position.x = position.x
-                    starship.position.y = position.y
-                    starship.position.z = position.z
+                    if (snake.length < positions.length) {
+                        let diff = positions.length - snake.length
 
-                    const { x, y, z, w } = rotation
-                    starship.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
-                    const ball = getStarshipBall(starship)
-                    const loadMultiplier = (player.shootLoad > 0 ? player.shootLoad : 1)
-                    ball.rotation.y += 0.02 * loadMultiplier
-                    ball.rotation.x += 0.004
+                        while (diff > 0) {
+                            const newMesh = newRingMesh(positions[positions.length - diff])
+                            scene.add(newMesh)
+                            snake.push(newMesh)
+                            diff--
+                        }
+                    }
 
-                    if (loadMultiplier > 1) {
-                        const scaleFactor = 1.001 * loadMultiplier
-                        ball.scale.set(scaleFactor, scaleFactor, scaleFactor)
-                    } else {
-                        ball.scale.set(1, 1, 1)
+                    for (const [idx, mesh] of snake.entries()) {
+                        const { position, rotation } = positions[idx]
+                        mesh.position.x = position.x
+                        mesh.position.y = position.y
+                        mesh.position.z = position.z
+
+                        const { x, y, z, w } = rotation
+                        mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+
+                        mesh.scale.setLength(me.score / 2)
                     }
                 }
 
@@ -366,11 +377,12 @@ ws.addEventListener("message", async ({ data }) => {
                     break;
                 }
 
-                // set camera
-                const { state, pitch, yaw, score } = me
-                const { position, rotation } = state
+                // set camera from the head
+                const { pitch, yaw, score, positions } = me
+                const { position, rotation } = positions[0]
 
-                const playerMesh = playersMap.get(targetId)
+
+                const playerMesh = playersMap.get(targetId)[0]
 
                 hudX.innerText = Math.trunc(position.x)
                 hudY.innerText = Math.trunc(position.y)
@@ -379,14 +391,14 @@ ws.addEventListener("message", async ({ data }) => {
                 hudPitch.innerText = Math.trunc(pitch * 1000) / 100
                 hudYaw.innerText = Math.trunc(yaw * 1000) / 100
 
-                hudScore.innerText = score
+                hudScore.innerText = score - 1
 
                 const pitchIntensity = pitch / 0.5;
                 const yawIntensity = yaw / 0.5;
 
                 const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
 
-                const cameraOffset = new THREE.Vector3(500 * yawIntensity, (500 * (-pitchIntensity)) + 20, 100);
+                const cameraOffset = new THREE.Vector3(0, 100 * score, 150 * score);
                 cameraOffset.applyQuaternion(playerRot);
 
                 const idealPosition = new THREE.Vector3(
@@ -395,7 +407,7 @@ ws.addEventListener("message", async ({ data }) => {
                     position.z + cameraOffset.z
                 );
 
-                const cameraSpeed = 0.5;
+                const cameraSpeed = 0.1;
                 camera.position.lerp(idealPosition, cameraSpeed);
 
                 const playerUp = new THREE.Vector3(0, 1, 0);
@@ -414,7 +426,6 @@ ws.addEventListener("message", async ({ data }) => {
 
                 playerMesh.rotateX(visualPitch);
                 playerMesh.rotateY(visualTurn);
-                playerMesh.rotateZ(visualTurn);
 
                 const [planeX, planeY] = [
                     Math.floor((position.x + WORLD_BOX_OFFSET) / PLANE_VIEW_BOX_SIZE),
@@ -429,9 +440,10 @@ ws.addEventListener("message", async ({ data }) => {
                 const dummyBox_2 = new THREE.Box3();
 
                 const starCenterVec = new THREE.Vector3();
-                const starSizeVec = new THREE.Vector3(10, 10, 10);
-                const meCenterVec = new THREE.Vector3(me.state.position.x, me.state.position.y, me.state.position.z);
-                const meSizeVec = new THREE.Vector3(20, 20, 20);
+                const starSizeVec = new THREE.Vector3(20, 20, 20);
+                const meCenterVec = new THREE.Vector3(position.x, position.y, position.z);
+                const size = 4 * score
+                const meSizeVec = new THREE.Vector3(size, size, size);
 
                 dummyBox_2.setFromCenterAndSize(meCenterVec, meSizeVec);
                 for (const star of PLANE_VIEW_BOXES[planeX][planeY]) {
@@ -439,14 +451,14 @@ ws.addEventListener("message", async ({ data }) => {
                         continue
                     }
 
-                    const { x, y, z } = star.state.position
+                    const { x, y, z } = star.position.position
                     starCenterVec.set(x, y, z)
                     dummyBox_1.setFromCenterAndSize(starCenterVec, starSizeVec)
 
                     if (dummyBox_1.intersectsBox(dummyBox_2)) {
                         const msg = {
                             starTouch: {
-                                targetId: star.state.id
+                                targetId: star.id
                             }
                         }
                         const i = Input.create(msg)
@@ -455,7 +467,7 @@ ws.addEventListener("message", async ({ data }) => {
                     }
                 }
                 renderer.render(scene, camera)
-                //console.timeEnd("Game tick")
+                console.timeEnd("Game tick")
                 break;
         }
     } catch (e) {

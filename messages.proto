@@ -19,41 +19,41 @@ message Vector4 {
   float z = 3;
   float w = 4;
 }
-
 /**
- *
- */
-message GameObjectDefinition {
-  int32   id       = 1;
-  Vector3 position = 2;
-  Vector4 rotation = 3;
+*
+*/
+message PosAndRot {
+  Vector3 position = 1;
+  Vector4 rotation = 2;
 }
 
 /**
  * star definition
  */
 message Star {
-  GameObjectDefinition state  = 1;
-  bool                 active = 2;
+  int32     id = 1;
+  PosAndRot position  = 2;
+  bool      active = 3;
 }
 
 /**
  *
  */
 message Player {
-  GameObjectDefinition state = 1;
-  float pitch = 2;
-  float yaw = 3;
-  int32 score = 4;
-  int32 shoot_load = 5;
+  float pitch = 1;
+  float yaw = 2;
+  int32 score = 3;
+  repeated PosAndRot positions = 4;
+  int32 id = 5;
 }
 
 /**
 *
 */
 message FlashOfLight {
-  GameObjectDefinition state = 1;
+  PosAndRot position = 1;
   int32 intensity = 2;
+  int32 id = 3;
 }
 
 /*
