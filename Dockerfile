@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-
+RUN go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@latest
 RUN npm install -g protobufjs-cli protobufjs
 
 COPY go.mod go.sum ./
