@@ -13,6 +13,7 @@ func (par *PositionAndRotation) toProto() *protos.PosAndRot {
 
 	par.protoCache.Position = toProtoVec3(par.p)
 	par.protoCache.Rotation = toProtoVec4(par.r)
+	par.protoCache.Radius = par.radius
 
 	return par.protoCache
 }
@@ -38,6 +39,7 @@ type PositionAndRotation struct {
 	p mgl32.Vec3
 	r mgl32.Quat
 
+	radius     float32
 	protoCache *protos.PosAndRot
 }
 

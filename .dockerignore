@@ -1,6 +1,3 @@
 .git
-bin
-game-server
+protos
 static/proto
-protos/proto
-node_modules

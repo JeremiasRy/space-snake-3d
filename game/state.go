@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	WORLD_WIDTH  float32 = 50_000
-	WORLD_HEIGHT float32 = 50_000
-	WORLD_DEPTH  float32 = 50_000
+	WORLD_WIDTH  float32 = 100_000
+	WORLD_HEIGHT float32 = 100_000
+	WORLD_DEPTH  float32 = 100_000
 
 	STAR_CAP    int = 2_000_000
 	STAR_ACTIVE int = STAR_CAP / 2

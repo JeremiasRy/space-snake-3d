@@ -21,6 +21,7 @@ import { createFlashSprite } from "./flashOfLight.js";
  * @typedef {Object} PosAndRot
  * @property {Vector3} position 
  * @property {Vector4} rotation 
+ * @property {number} radius
  */
 
 
@@ -118,13 +119,13 @@ console.timeEnd("Pre-compile");
 
 const playerMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, wireframe: true });
 /**
- * 
  * @param {PosAndRot} param0 
  */
-const newRingMesh = ({ position, rotation }) => {
-    const geometry = new THREE.RingGeometry(8, 16, 8, 8);
+const newRingMesh = ({ position, rotation, radius }) => {
+    const geometry = new THREE.RingGeometry(1, 2, 8, 8);
     const mesh = new THREE.Mesh(geometry, playerMaterial);
     mesh.position.set(position.x, position.y, position.z);
+    mesh.scale.setScalar(radius)
 
     const { x, y, z, w } = rotation;
     mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w));
@@ -142,7 +143,6 @@ const newPlayer = (player) => {
     return meshArr;
 }
 /**
- * 
  * @param {FlashOfLight} flash 
  * @returns 
  */
@@ -224,6 +224,22 @@ const hudPitch = document.getElementById("pitch")
 const hudYaw = document.getElementById("yaw")
 
 const hudScore = document.getElementById("score-ui")
+
+const dummyBox_1 = new THREE.Box3();
+const dummyBox_2 = new THREE.Box3();
+const playerHitboxHelper = new THREE.Box3Helper(dummyBox_2, 0x00ff00);
+const arrowTargetVec = new THREE.Vector3();
+const arrowDirVec = new THREE.Vector3();
+
+const closestStarArrow = new THREE.ArrowHelper(
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 0, 0),
+    10,
+    0x00ffff
+);
+
+scene.add(closestStarArrow);
+scene.add(playerHitboxHelper);
 
 /**
  * @param {MessageEvent} event
@@ -346,7 +362,6 @@ ws.addEventListener("message", async ({ data }) => {
 
                     if (snake.length < positions.length) {
                         let diff = positions.length - snake.length
-
                         while (diff > 0) {
                             const newMesh = newRingMesh(positions[positions.length - diff])
                             scene.add(newMesh)
@@ -356,15 +371,20 @@ ws.addEventListener("message", async ({ data }) => {
                     }
 
                     for (const [idx, mesh] of snake.entries()) {
-                        const { position, rotation } = positions[idx]
+                        const { position, rotation, radius } = positions[idx]
                         mesh.position.x = position.x
                         mesh.position.y = position.y
                         mesh.position.z = position.z
 
-                        const { x, y, z, w } = rotation
-                        mesh.rotation.setFromQuaternion(new THREE.Quaternion(x, y, z, w))
+                        mesh.scale.setScalar(radius / 10)
 
-                        mesh.scale.setLength(me.score / 2)
+                        const { x, y, z, w } = rotation
+                        const headingQuat = new THREE.Quaternion(x, y, z, w)
+
+                        mesh.quaternion.copy(headingQuat)
+
+                        const spinSpeed = 0.002;
+                        mesh.rotateZ(performance.now() * spinSpeed);
                     }
                 }
 
@@ -379,7 +399,7 @@ ws.addEventListener("message", async ({ data }) => {
 
                 // set camera from the head
                 const { pitch, yaw, score, positions } = me
-                const { position, rotation } = positions[0]
+                const { position, rotation, radius } = positions[0]
 
 
                 const playerMesh = playersMap.get(targetId)[0]
@@ -398,7 +418,7 @@ ws.addEventListener("message", async ({ data }) => {
 
                 const playerRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
 
-                const cameraOffset = new THREE.Vector3(0, 100 * score, 150 * score);
+                const cameraOffset = new THREE.Vector3(0, positions.length * 10, positions.length * 15);
                 cameraOffset.applyQuaternion(playerRot);
 
                 const idealPosition = new THREE.Vector3(
@@ -418,7 +438,6 @@ ws.addEventListener("message", async ({ data }) => {
 
                 const maxOffsetRadians = THREE.MathUtils.degToRad(180);
 
-
                 const visualPitch = pitchIntensity * maxOffsetRadians;
                 const visualTurn = yawIntensity * maxOffsetRadians;
 
@@ -436,16 +455,17 @@ ws.addEventListener("message", async ({ data }) => {
                     starMaterial.userData.shader.uniforms.uPlayerPos.value.copy(position);
                 }
 
-                const dummyBox_1 = new THREE.Box3();
-                const dummyBox_2 = new THREE.Box3();
-
                 const starCenterVec = new THREE.Vector3();
                 const starSizeVec = new THREE.Vector3(20, 20, 20);
                 const meCenterVec = new THREE.Vector3(position.x, position.y, position.z);
-                const size = 4 * score
+                const size = radius / 10
                 const meSizeVec = new THREE.Vector3(size, size, size);
 
                 dummyBox_2.setFromCenterAndSize(meCenterVec, meSizeVec);
+
+                let closestDistanceSq = Number.MAX_VALUE;
+                let closestStarPos = null;
+
                 for (const star of PLANE_VIEW_BOXES[planeX][planeY]) {
                     if (!star.active) {
                         continue
@@ -465,6 +485,27 @@ ws.addEventListener("message", async ({ data }) => {
                         ws.send(Input.encode(i).finish())
                         break; // There are no overlapping stars so no need to continue the checks
                     }
+
+                    const distSq = meCenterVec.distanceToSquared(starCenterVec);
+
+                    if (distSq < closestDistanceSq) {
+                        closestDistanceSq = distSq;
+                        closestStarPos = { x, y, z };
+                    }
+                }
+
+                if (closestStarPos !== null) {
+                    closestStarArrow.visible = true;
+                    arrowTargetVec.set(closestStarPos.x, closestStarPos.y, closestStarPos.z);
+
+                    arrowDirVec.subVectors(arrowTargetVec, meCenterVec);
+                    const distance = arrowDirVec.length();
+                    arrowDirVec.normalize();
+
+                    closestStarArrow.position.copy(meCenterVec);
+                    closestStarArrow.setDirection(arrowDirVec);
+
+                    closestStarArrow.setLength(100 < distance ? 100 : distance, 15, 10);
                 }
                 renderer.render(scene, camera)
                 console.timeEnd("Game tick")

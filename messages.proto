@@ -19,41 +19,43 @@ message Vector4 {
   float z = 3;
   float w = 4;
 }
+
 /**
-*
-*/
+ *
+ */
 message PosAndRot {
   Vector3 position = 1;
   Vector4 rotation = 2;
+  float   radius   = 3;
 }
 
 /**
  * star definition
  */
 message Star {
-  int32     id = 1;
-  PosAndRot position  = 2;
-  bool      active = 3;
+  int32     id       = 1;
+  PosAndRot position = 2;
+  bool      active   = 3;
 }
 
 /**
  *
  */
 message Player {
-  float pitch = 1;
-  float yaw = 2;
-  int32 score = 3;
+  float              pitch     = 1;
+  float              yaw       = 2;
+  int32              score     = 3;
   repeated PosAndRot positions = 4;
-  int32 id = 5;
+  int32              id        = 5;
 }
 
 /**
-*
-*/
+ *
+ */
 message FlashOfLight {
-  PosAndRot position = 1;
-  int32 intensity = 2;
-  int32 id = 3;
+  PosAndRot position  = 1;
+  int32     intensity = 2;
+  int32     id        = 3;
 }
 
 /*
@@ -78,8 +80,8 @@ message Players {
 }
 
 /**
-*
-*/
+ *
+ */
 message Flashes {
   repeated FlashOfLight flashes = 1;
 }
@@ -90,7 +92,7 @@ message Flashes {
 message GameTick {
   Players players      = 1;
   Stars   stars_update = 2;
-  Flashes   flashes    = 3;
+  Flashes flashes      = 3;
 }
 
 /**

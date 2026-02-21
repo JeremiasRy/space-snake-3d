@@ -18,9 +18,7 @@ const (
 	MAX_ROT_SPEED           float32 = 0.1
 	MAX_SPEED               float32 = 200.0
 	ROT_FRICTION            float32 = 0.9
-
-	LOAD_MAX_INCREASE_AMOUNT int32 = 10
-	SCORE_LENGTH_FACTOR      int   = 10
+	SCORE_LENGTH_FACTOR     int     = 5
 )
 
 type Input int32
@@ -46,12 +44,14 @@ type Player struct {
 	speed     float32
 	pitch     float32
 	yaw       float32
+	radius    float32
+	rollAngle float32
+	rollSpeed float32
 	brake     float32
 	score     int32
 	positions list.List
 	maxLength int
 
-	// how many frames has input been down
 	heldMap map[Input]float32
 
 	protoCache *protos.Player
@@ -63,6 +63,7 @@ func NewPlayer(conn *websocket.Conn, s *State) *Player {
 		send:      make(chan []byte, 64),
 		input:     0,
 		speed:     10,
+		radius:    16,
 		positions: list.List{},
 		maxLength: SCORE_LENGTH_FACTOR,
 		score:     1,
@@ -120,10 +121,12 @@ func (p *Player) ReadFrom() {
 				p.state.events <- &StarTouch{starId: msg.StarTouch.TargetId}
 				p.score++
 				p.maxLength += SCORE_LENGTH_FACTOR
+				p.radius *= 1.2
 			}
 		}
 	}
 }
+
 func (p *Player) applyInput() {
 	isPitching := false
 
@@ -177,7 +180,7 @@ func (p *Player) applyInput() {
 		framesHeld := p.heldMap[FLAG_MOVE_RIGHT]
 		p.yaw -= BASE_ROT_SPEED + (framesHeld * ROT_JERK_FACTOR)
 	} else if p.heldMap[FLAG_MOVE_RIGHT] > 0 {
-		p.heldMap[FLAG_MOVE_RIGHT]--
+		p.heldMap[FLAG_MOVE_RIGHT] = 0
 	}
 
 	if !isYawing {
@@ -225,6 +228,7 @@ func (p *Player) applyInput() {
 
 	new.Position = toProtoVec3(p.PositionAndRotation.p)
 	new.Rotation = toProtoVec4(p.PositionAndRotation.r)
+	new.Radius = p.radius
 
 	p.positions.PushFront(new)
 
